@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Comprovante de Aposta #2</title>
+                <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; }
+                    .comprovante { max-width: 800px; margin: 0 auto; border: 2px solid #007bff; padding: 20px; }
+                    .header { text-align: center; border-bottom: 2px solid #007bff; padding-bottom: 20px; margin-bottom: 20px; }
+                    .header h1 { color: #007bff; margin: 0; }
+                    .info-grupo { margin-bottom: 20px; }
+                    .info-grupo h2 { color: #0056b3; }
+                    .info-item { margin-bottom: 10px; }
+                    .info-label { font-weight: bold; color: #555; }
+                    .numeros { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+                    .numero { 
+                        width: 40px; height: 40px; 
+                        display: flex; align-items: center; justify-content: center;
+                        background: #007bff; color: white; 
+                        border-radius: 50%; font-weight: bold;
+                    }
+                    .footer { 
+                        margin-top: 30px; text-align: center; 
+                        padding-top: 20px; border-top: 1px solid #ddd;
+                        color: #666; font-size: 14px;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="comprovante">
+                    <div class="header">
+                        <h1>Comprovante de Aposta</h1>
+                        <p>Sistema de Loteria</p>
+                    </div>
+                    
+                    <div class="info-grupo">
+                        <h2>Informações da Aposta</h2>
+                        <div class="info-item">
+                            <span class="info-label">Número da Aposta:</span>
+                            <span>#000002</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Data:</span>
+                            <span>24/01/2025 15:04:12</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Status:</span>
+                            <span style="color: #2e7d32;">Aprovada</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-grupo">
+                        <h2>Dados do Apostador</h2>
+                        <div class="info-item">
+                            <span class="info-label">Nome:</span>
+                            <span>Evandro2</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Email:</span>
+                            <span>a@a.com</span>
+                        </div>
+                        
+                        <div class="info-item">
+                            <span class="info-label">WhatsApp:</span>
+                            <span>(31) 97101-6600</span>
+                        </div>
+                        
+                    </div>
+                    
+                    <div class="info-grupo">
+                        <h2>Números Apostados</h2>
+                        <div class="numeros">
+                            <div class="numero">2</div><div class="numero">16</div><div class="numero">22</div><div class="numero">44</div><div class="numero">47</div>
+                        </div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Este comprovante é válido como confirmação da sua aposta.</p>
+                        <p>Data de emissão: 24/01/2025 18:57:48</p>
+                    </div>
+                </div>
+                <script>
+                    window.onload = function() {
+                        window.print();
+                    }
+                </script>
+            </body>
+            </html>

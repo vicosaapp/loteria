@@ -1,0 +1,135 @@
+
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Comprovante de Aposta #2</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        line-height: 1.6;
+                        color: #333;
+                        max-width: 800px;
+                        margin: 20px auto;
+                        padding: 20px;
+                        background: #f9f9f9;
+                    }
+                    .comprovante {
+                        background: white;
+                        padding: 30px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }
+                    .header {
+                        text-align: center;
+                        margin-bottom: 30px;
+                        padding-bottom: 20px;
+                        border-bottom: 2px solid #007bff;
+                    }
+                    .header h1 {
+                        color: #007bff;
+                        margin: 0;
+                        font-size: 24px;
+                    }
+                    .info-grupo {
+                        margin-bottom: 20px;
+                    }
+                    .info-grupo h2 {
+                        color: #0056b3;
+                        font-size: 18px;
+                        margin-bottom: 10px;
+                    }
+                    .info-item {
+                        display: flex;
+                        margin-bottom: 8px;
+                    }
+                    .info-label {
+                        font-weight: bold;
+                        width: 150px;
+                        color: #555;
+                    }
+                    .numeros {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 10px;
+                        margin-top: 10px;
+                    }
+                    .numero {
+                        width: 40px;
+                        height: 40px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: #007bff;
+                        color: white;
+                        border-radius: 50%;
+                        font-weight: bold;
+                    }
+                    .footer {
+                        margin-top: 30px;
+                        text-align: center;
+                        font-size: 14px;
+                        color: #666;
+                        padding-top: 20px;
+                        border-top: 1px solid #ddd;
+                    }
+                    @media print {
+                        body {
+                            background: white;
+                        }
+                        .comprovante {
+                            box-shadow: none;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="comprovante">
+                    <div class="header">
+                        <h1>Comprovante de Aposta</h1>
+                        <p>Sistema de Loteria</p>
+                    </div>
+                    
+                    <div class="info-grupo">
+                        <h2>Informações da Aposta</h2>
+                        <div class="info-item">
+                            <span class="info-label">Número da Aposta:</span>
+                            <span>#000002</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Data:</span>
+                            <span>10/01/2025 14:28:59</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Status:</span>
+                            <span style="color: #2e7d32;">Aprovada</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-grupo">
+                        <h2>Dados do Apostador</h2>
+                        <div class="info-item">
+                            <span class="info-label">Nome:</span>
+                            <span>Evandro</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Email:</span>
+                            <span>e@e.com</span>
+                        </div>
+                        
+                    </div>
+                    
+                    <div class="info-grupo">
+                        <h2>Números Apostados</h2>
+                        <div class="numeros">
+                            <div class="numero">2</div><div class="numero">17</div><div class="numero">25</div><div class="numero">42</div><div class="numero">55</div><div class="numero">57</div>
+                        </div>
+                    </div>
+                    
+                    <div class="footer">
+                        <p>Este comprovante é válido como confirmação da sua aposta.</p>
+                        <p>Data de emissão: 10/01/2025 17:35:20</p>
+                    </div>
+                </div>
+            </body>
+            </html>
