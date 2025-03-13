@@ -12,6 +12,13 @@ jobs:
       with:
         fetch-depth: 0
     
+    - name: Display FTP connection info (without password)
+      run: |
+        echo "FTP Server: lotominas.site"
+        echo "FTP Username: patto200"
+        echo "FTP Port: 21"
+        echo "Remote Path: /www/wwwroot/lotominas.site/"
+    
     - name: FTP Deploy
       uses: SamKirkland/FTP-Deploy-Action@4.3.0
       with:
@@ -20,6 +27,11 @@ jobs:
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
         server-dir: /www/wwwroot/lotominas.site/
+        log-level: verbose
+        timeout: 120000
+        protocol: ftp
+        local-dir: ./
+        dangerous-clean-slate: false
         exclude: |
           **/.git*
           **/.git*/**

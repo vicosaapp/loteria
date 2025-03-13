@@ -1,0 +1,31 @@
+name: Test FTP Deploy
+
+on:
+  workflow_dispatch:  # Permite execução manual
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    
+    - name: Create test file
+      run: |
+        echo "This is a test file created at $(date)" > test_file.txt
+        ls -la
+    
+    - name: FTP Deploy Test
+      uses: SamKirkland/FTP-Deploy-Action@4.3.0
+      with:
+        server: lotominas.site
+        username: patto200
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: 21
+        server-dir: /www/wwwroot/lotominas.site/
+        log-level: verbose
+        protocol: ftp
+        local-dir: ./
+        include: |
+          test_file.txt 

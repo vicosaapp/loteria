@@ -3,13 +3,11 @@
 
 // Informações do arquivo
 $file_info = [
-    'nome' => 'teste_cursor_ide.php',
+    'nome' => 'teste_cursor.php',
     'data_criacao' => date('Y-m-d H:i:s'),
     'versao' => '1.0',
     'descricao' => 'Este arquivo foi criado para testar o upload via Cursor IDE'
 ];
-
-$file_info['modificado'] = 'Sim - 2025-03-14 03:55:33';
 
 // Exibir informações
 echo "<h1>Teste de Upload via Cursor IDE</h1>";
@@ -22,12 +20,12 @@ foreach ($file_info as $key => $value) {
 echo "</ul>";
 
 // Criar um arquivo de teste
-$test_file = "teste_cursor_" . time() . ".txt";
-$content = "Este arquivo foi criado pelo script teste_cursor_ide.php em " . date('Y-m-d H:i:s');
+$test_file = __DIR__ . "/teste_cursor_" . time() . ".txt";
+$content = "Este arquivo foi criado pelo script teste_cursor.php em " . date('Y-m-d H:i:s');
 
 if (file_put_contents($test_file, $content)) {
     echo "<h2>Arquivo de Teste Criado</h2>";
-    echo "<p>Nome do arquivo: $test_file</p>";
+    echo "<p>Nome do arquivo: " . basename($test_file) . "</p>";
     echo "<p>Conteúdo: " . htmlspecialchars($content) . "</p>";
     
     // Adicionar instruções
