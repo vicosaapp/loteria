@@ -19,7 +19,7 @@ jobs:
     - name: SFTP Deploy
       uses: wlixcc/SFTP-Deploy-Action@v1.2.4
       with:
-        server: lotominas.site
+        server: 217.196.61.30
         username: patto200
         password: ${{ secrets.FTP_PASSWORD }}
         port: 22  # Porta SSH padrão

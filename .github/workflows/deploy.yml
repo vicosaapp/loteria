@@ -14,7 +14,7 @@ jobs:
     
     - name: Display FTP connection info (without password)
       run: |
-        echo "FTP Server: 2a02:4780:14:4dda::1"
+        echo "FTP Server: 217.196.61.30"
         echo "FTP Username: patto200"
         echo "FTP Port: 21"
         echo "Remote Path: /www/wwwroot/lotominas.site/"
@@ -22,7 +22,7 @@ jobs:
     - name: FTP Deploy
       uses: SamKirkland/FTP-Deploy-Action@4.3.0
       with:
-        server: 2a02:4780:14:4dda::1
+        server: 217.196.61.30
         username: patto200
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
