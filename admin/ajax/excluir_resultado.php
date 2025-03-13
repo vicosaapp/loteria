@@ -7,42 +7,47 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
     exit;
 }
 
-$data = json_decode(file_get_contents('php://input'), true);
+header('Content-Type: application/json');
 
 try {
-    // Inicia a transação
+    $dados = json_decode(file_get_contents('php://input'), true);
+    
+    if (!isset($dados['id'])) {
+        throw new Exception('ID do resultado não fornecido');
+    }
+
+    // Primeiro, vamos verificar se o resultado existe
+    $stmt = $pdo->prepare("SELECT id FROM resultados WHERE id = ?");
+    $stmt->execute([$dados['id']]);
+    
+    if ($stmt->rowCount() === 0) {
+        throw new Exception('Resultado não encontrado');
+    }
+
+    // Agora vamos excluir o resultado
     $pdo->beginTransaction();
-    
-    // Primeiro, atualiza o status das apostas ganhadoras
-    $stmt = $pdo->prepare("
-        UPDATE apostas a 
-        JOIN ganhadores g ON a.id = g.aposta_id 
-        WHERE g.resultado_id = ?
-        SET a.status = 'aprovada'
-    ");
-    $stmt->execute([$data['resultado_id']]);
-    
-    // Remove os ganhadores
-    $stmt = $pdo->prepare("DELETE FROM ganhadores WHERE resultado_id = ?");
-    $stmt->execute([$data['resultado_id']]);
-    
-    // Remove o resultado
-    $stmt = $pdo->prepare("DELETE FROM resultados WHERE id = ?");
-    $stmt->execute([$data['resultado_id']]);
-    
-    // Confirma a transação
-    $pdo->commit();
-    
-    echo json_encode([
-        'success' => true,
-        'message' => 'Resultado excluído com sucesso!'
-    ]);
-    
+
+    try {
+        // Exclui o resultado
+        $stmt = $pdo->prepare("DELETE FROM resultados WHERE id = ?");
+        $stmt->execute([$dados['id']]);
+
+        $pdo->commit();
+        echo json_encode(['success' => true]);
+
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        throw $e;
+    }
+
 } catch (Exception $e) {
-    // Desfaz a transação em caso de erro
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    
+    http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => 'Erro ao excluir resultado: ' . $e->getMessage()
+        'message' => $e->getMessage()
     ]);
 } 

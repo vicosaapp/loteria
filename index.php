@@ -1,30 +1,10 @@
 <?php
 require_once 'config/database.php';
-session_start(); // Garantir que a sessão está iniciada
+session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Se não estiver logado, redireciona para login
-if (!isset($_SESSION['usuario_id'])) {
-    header("Location: login.php");
-    exit();
-}
-
-// Busca informações do usuário
-try {
-    $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE id = ?");
-    $stmt->execute([$_SESSION['usuario_id']]);
-    $usuario = $stmt->fetch();
-} catch(PDOException $e) {
-    die("Erro ao buscar usuário: " . $e->getMessage());
-}
-
-// Define o título da página
-$pageTitle = 'Sistema de Loteria';
-require_once 'includes/header.php';
-
-// Verificar se o usuário está logado
-$usuarioLogado = isset($_SESSION['usuario_id']);
+// Removida a verificação de sessão e redirecionamento
 
 try {
     // Buscar jogos ativos com mais informações
@@ -70,28 +50,32 @@ try {
 // Array de cores para os cards
 $cardColors = [
     [
-        'gradient' => 'linear-gradient(135deg, #4e73df, #224abe)',
-        'accent' => '#4e73df'
+        'gradient' => 'linear-gradient(135deg, #03a64d, #2d8e59)', // Verde Original
+        'accent' => '#03a64d'
     ],
     [
-        'gradient' => 'linear-gradient(135deg, #2ecc71, #27ae60)',
-        'accent' => '#2ecc71'
+        'gradient' => 'linear-gradient(135deg, #FF6B6B, #EE5253)', // Vermelho
+        'accent' => '#FF6B6B'
     ],
     [
-        'gradient' => 'linear-gradient(135deg, #e74c3c, #c0392b)',
-        'accent' => '#e74c3c'
+        'gradient' => 'linear-gradient(135deg, #4834D4, #686DE0)', // Roxo
+        'accent' => '#4834D4'
     ],
     [
-        'gradient' => 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-        'accent' => '#9b59b6'
+        'gradient' => 'linear-gradient(135deg, #FF9F43, #FFA94D)', // Laranja
+        'accent' => '#FF9F43'
     ],
     [
-        'gradient' => 'linear-gradient(135deg, #f1c40f, #f39c12)',
-        'accent' => '#f1c40f'
+        'gradient' => 'linear-gradient(135deg, #22A6B3, #7ED6DF)', // Azul
+        'accent' => '#22A6B3'
     ],
     [
-        'gradient' => 'linear-gradient(135deg, #1abc9c, #16a085)',
-        'accent' => '#1abc9c'
+        'gradient' => 'linear-gradient(135deg, #F368E0, #FF9FF3)', // Rosa
+        'accent' => '#F368E0'
+    ],
+    [
+        'gradient' => 'linear-gradient(135deg, #FFB142, #FDB827)', // Amarelo
+        'accent' => '#FFB142'
     ]
 ];
 ?>
@@ -101,930 +85,559 @@ $cardColors = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loteria Online</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <title>Sistema de Loteria - Sua Sorte Está Aqui!</title>
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.css">
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --primary-green: #03a64d;
+            --secondary-green: #2d8e59;
+            --primary-gradient: linear-gradient(135deg, #03a64d, #2d8e59);
+            --hover-gradient: linear-gradient(135deg, #2d8e59, #03a64d);
+            --text-light: #ffffff;
+            --text-dark: #2c3e50;
+            --background-light: #f8f9fc;
         }
-        
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f0f2f5;
-            color: #1a1a1a;
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--background-light);
         }
-        
-        /* Header */
-        .app-header {
-            background: linear-gradient(135deg, #4e73df, #224abe);
-            color: white;
-            padding: 1rem 2rem;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+
+        .navbar {
+            background: var(--primary-gradient);
+            padding: 0.5rem 0;
+            box-shadow: 0 2px 15px rgba(3, 166, 77, 0.2);
         }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+
+        .navbar-brand {
+            font-weight: 700;
             font-size: 1.5rem;
-            font-weight: bold;
-            color: white;
-            text-decoration: none;
+            padding: 0;
         }
-        
-        .logo i {
-            font-size: 1.8rem;
+
+        .navbar-brand img {
+            height: 50px;
+            width: auto;
         }
-        
-        .nav-menu {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
+
         .nav-link {
-            color: rgba(255,255,255,0.9);
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
-            transition: all 0.3s ease;
             font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            padding: 0.5rem 1rem !important;
+            transition: all 0.3s ease;
         }
-        
+
         .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            transform: translateY(-1px);
-        }
-        
-        .nav-link.active {
-            background: rgba(255,255,255,0.2);
-            color: white;
-        }
-        
-        .nav-link.btn-sair {
-            background: rgba(220,53,69,0.1);
-            color: #fff;
-        }
-        
-        .nav-link.btn-sair:hover {
-            background: rgba(220,53,69,0.2);
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0.5rem 1rem;
-            background: rgba(255,255,255,0.1);
-            border-radius: 25px;
-            margin-right: 1rem;
-        }
-        
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .user-name {
-            font-weight: 500;
-            color: white;
-        }
-        
-        /* Conteúdo Principal */
-        .main-content {
-            margin-top: 70px;
-            padding: 20px;
-            max-width: 1200px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        /* Hero Section */
-        .hero {
-            background: white;
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-        
-        .hero h1 {
-            font-size: 2rem;
-            color: #2d3748;
-            margin-bottom: 15px;
-        }
-        
-        .hero p {
-            color: #718096;
-            font-size: 1.1rem;
-            margin-bottom: 25px;
-        }
-        
-        .cta-button {
-            background: #4e73df;
-            color: white;
-            padding: 12px 30px;
-            border-radius: 25px;
-            text-decoration: none;
-            font-weight: 600;
-            display: inline-block;
-            transition: all 0.3s ease;
-        }
-        
-        .cta-button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(78,115,223,0.3);
         }
-        
-        /* Grid de Jogos */
-        .games-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 25px;
-            margin-top: 30px;
+
+        /* Banner Styles */
+        .swiper {
+            width: 100%;
+            height: 500px;
         }
-        
-        .game-card {
-            background: white;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-            transition: all 0.3s ease;
-            border: 2px solid transparent;
+
+        .swiper-slide {
+            position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
-        
-        .game-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        
-        .game-header {
-            background: linear-gradient(135deg, #4e73df, #224abe);
+
+        .banner-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
             color: white;
-            padding: 25px;
+            width: 80%;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .banner-content h2 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .banner-content p {
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Cards Styles */
+        .game-card {
+            border: none;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            margin-bottom: 20px;
+            background: white;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .game-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .game-card .card-header {
+            padding: 1.2rem 0.8rem;
             position: relative;
             overflow: hidden;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        
-        .game-header::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 100px;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
-            transform: skewX(-15deg);
+
+        .game-card .card-header h3 {
+            font-size: 1.1rem;
+            margin: 0;
+            position: relative;
+            z-index: 1;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: center;
+            color: white;
         }
-        
-        .game-title {
+
+        .game-info {
+            padding: 1.2rem 0.8rem;
+            background: white;
+        }
+
+        .prize-container {
+            text-align: center;
+            margin-bottom: 0.8rem;
+            padding: 0.8rem;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .prize-value {
             font-size: 1.4rem;
             font-weight: 700;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            display: block;
+            line-height: 1.2;
         }
-        
-        .game-subtitle {
-            font-size: 1rem;
-            opacity: 0.9;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .game-body {
-            padding: 25px;
-        }
-        
-        .game-info-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .game-stat {
-            background: #f8f9fc;
-            padding: 15px;
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .stat-label {
-            font-size: 0.85rem;
-            color: #6e7687;
-        }
-        
-        .stat-value {
-            font-size: 1.1rem;
-            color: #2d3748;
+
+        .prize-label {
+            color: #666;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             font-weight: 600;
+            margin-top: 2px;
         }
-        
-        .game-description {
-            color: #4a5568;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #edf2f7;
-        }
-        
-        .game-footer {
-            padding: 20px 25px;
-            background: #f8f9fc;
+
+        .game-stats {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            gap: 15px;
+            margin-bottom: 0.8rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         }
-        
-        .prize-info {
+
+        .game-stat-item {
             display: flex;
-            flex-direction: column;
-            gap: 3px;
+            align-items: center;
+            color: #555;
+            font-weight: 500;
+            font-size: 0.75rem;
         }
-        
-        .prize-label {
-            font-size: 0.85rem;
-            color: #6e7687;
+
+        .game-stat-item i {
+            font-size: 0.9rem;
+            margin-right: 6px;
+            padding: 5px;
+            border-radius: 50%;
         }
-        
-        .prize-value {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: #2d3748;
-        }
-        
-        .play-button {
-            background: #4e73df;
+
+        .btn-apostar {
+            padding: 0.6rem 0.8rem;
+            border-radius: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.8rem;
+            width: 100%;
             color: white;
-            padding: 12px 25px;
-            border-radius: 25px;
-            text-decoration: none;
-            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .btn-apostar i {
+            margin-left: 6px;
+            font-size: 0.8rem;
+        }
+
+        @media (max-width: 1400px) {
+            .col-jogos {
+                flex: 0 0 16.666667%;
+                max-width: 16.666667%;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .col-jogos {
+                flex: 0 0 25%;
+                max-width: 25%;
+            }
+        }
+
+        @media (max-width: 992px) {
+            .col-jogos {
+                flex: 0 0 33.333333%;
+                max-width: 33.333333%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .col-jogos {
+                flex: 0 0 50%;
+                max-width: 50%;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .col-jogos {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+        }
+
+        /* Features Section */
+        .features-section {
+            padding: 5rem 0;
+            background: white;
+        }
+
+        .feature-item {
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            color: #03a64d;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 3rem 0;
+        }
+
+        .btn-custom {
+            background: var(--primary-gradient);
+            padding: 0.8rem 2rem;
+            border-radius: 50px;
             font-weight: 600;
             transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .play-button:hover {
-            background: #224abe;
-            transform: translateY(-2px);
-        }
-        
-        .status-badge {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(5px);
-        }
-        
-        .last-winners {
-            margin-top: 15px;
-            font-size: 0.9rem;
-            color: #4a5568;
-        }
-        
-        .winners-count {
-            color: #4e73df;
-            font-weight: 600;
-        }
-        
-        @media (max-width: 768px) {
-            .hero {
-                padding: 30px 20px;
-            }
-            
-            .hero h1 {
-                font-size: 1.5rem;
-            }
-            
-            .hero p {
-                font-size: 1rem;
-            }
-        }
-        
-        /* Estilo dinâmico para os cards */
-        <?php foreach($cardColors as $index => $colors): ?>
-        .game-card.color-<?php echo $index; ?> .game-header {
-            background: <?php echo $colors['gradient']; ?>;
-        }
-        
-        .game-card.color-<?php echo $index; ?> .play-button {
-            background: <?php echo $colors['accent']; ?>;
-        }
-        
-        .game-card.color-<?php echo $index; ?> .play-button:hover {
-            background: <?php echo $colors['accent']; ?>;
-            filter: brightness(90%);
-        }
-        
-        .game-card.color-<?php echo $index; ?> .game-stat i,
-        .game-card.color-<?php echo $index; ?> .winners-count {
-            color: <?php echo $colors['accent']; ?>;
-        }
-        <?php endforeach; ?>
-        
-        /* Ajuste no hover dos cards */
-        <?php foreach($cardColors as $index => $colors): ?>
-        .game-card.color-<?php echo $index; ?>:hover {
-            border-color: <?php echo $colors['accent']; ?>;
-        }
-        <?php endforeach; ?>
-
-        .numeros-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
-            gap: 10px;
-            padding: 15px;
-        }
-
-        .numero-btn {
-            width: 45px;
-            height: 45px;
             border: none;
-            border-radius: 50%;
-            background: #f0f2f5;
-            color: #2d3748;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .numero-btn:hover {
-            background: #e2e8f0;
-        }
-
-        .numero-btn.selected {
-            background: #4e73df;
             color: white;
         }
 
-        .info-card {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .btn-custom:hover {
+            background: var(--hover-gradient);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(3, 166, 77, 0.3);
         }
 
-        .info-label {
-            color: #6c757d;
-            font-size: 0.9rem;
-            margin-bottom: 5px;
-        }
-
-        .info-value {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: #2d3748;
-        }
-
-        /* Estilos para o Modal */
-        .modal-content {
-            border: none;
-            border-radius: 15px;
-            overflow: hidden;
-        }
-
-        .game-banner {
-            background: linear-gradient(45deg, #f8f9fa, #e9ecef);
-            border-bottom: 1px solid #dee2e6;
-        }
-
-        .prize-highlight {
-            margin-bottom: 1.5rem;
-        }
-
-        .prize-label {
-            font-size: 0.9rem;
-            color: #6c757d;
-            margin-bottom: 0.5rem;
-        }
-
-        .prize-value {
+        .stats-counter {
             font-size: 2rem;
             font-weight: 700;
-            color: #4e73df;
+            color: var(--primary-color);
         }
 
-        .game-rules {
-            display: flex;
-            justify-content: center;
-            gap: 1rem;
+        .swiper-pagination-bullet-active {
+            background: #03a64d;
         }
 
-        .badge {
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
+        /* Atualizando links do footer */
+        .footer a {
+            color: var(--text-light) !important;
+            transition: all 0.3s ease;
         }
 
-        .instructions {
-            font-size: 0.95rem;
+        .footer a:hover {
+            color: var(--primary-green) !important;
+            text-decoration: none;
         }
 
-        .instructions ul {
-            padding-left: 1.2rem;
-            margin-top: 0.5rem;
-        }
-
-        .instructions li {
-            margin-bottom: 0.3rem;
-        }
-
-        .section-title {
-            color: #495057;
-            font-weight: 600;
-        }
-
-        .numeros-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
-            gap: 8px;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 10px;
-        }
-
-        .numero-btn {
-            width: 45px;
-            height: 45px;
-            border: none;
-            border-radius: 50%;
-            background: white;
-            color: #495057;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
-        .numero-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .numero-btn.selected {
-            background: #4e73df;
-            color: white;
+        .feature-item:hover .feature-icon {
+            color: #2d8e59;
             transform: scale(1.1);
         }
 
-        .selected-display {
-            min-height: 60px;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 10px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            align-items: center;
-        }
-
-        .selected-display .placeholder {
-            color: #6c757d;
-            font-style: italic;
-        }
-
-        .selected-number {
-            background: #4e73df;
+        /* Estilizando os botões de navegação */
+        .swiper-button-next,
+        .swiper-button-prev {
             color: white;
-            width: 40px;
-            height: 40px;
+            background: rgba(3, 166, 77, 0.5);
+            width: 50px;
+            height: 50px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            animation: popIn 0.3s ease;
+            transition: all 0.3s ease;
         }
 
-        .bet-info {
-            color: #6c757d;
+        .swiper-button-next:hover,
+        .swiper-button-prev:hover {
+            background: rgba(45, 142, 89, 0.8);
         }
 
-        .selected-count {
-            font-weight: 600;
-            color: #4e73df;
+        .swiper-button-next::after,
+        .swiper-button-prev::after {
+            font-size: 20px;
         }
 
-        @keyframes popIn {
-            from {
-                transform: scale(0);
-                opacity: 0;
-            }
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
+        /* Estilizando a paginação */
+        .swiper-pagination-bullet {
+            width: 12px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.7);
+            opacity: 1;
+        }
+
+        /* Estilos para seção de Jogos em Destaque */
+        .section-title {
+            position: relative;
+            margin-bottom: 60px;
+            padding-bottom: 20px;
+            text-align: center;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 4px;
+            background: var(--primary-gradient);
+            border-radius: 2px;
+        }
+
+        .section-title h2 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .section-title p {
+            color: #666;
+            font-size: 1.1rem;
         }
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <header class="app-header">
-        <a href="index.php" class="logo">
-            <i class="fas fa-star"></i>
-            Loteria Online
-        </a>
-        
-        <nav class="nav-menu">
-            <?php if (isset($_SESSION['usuario_id'])): ?>
-                <div class="user-info">
-                    <div class="user-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
-                    <span class="user-name"><?php echo htmlspecialchars($usuario['nome']); ?></span>
-                </div>
-                
-                <a href="index.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'index.php' ? 'active' : ''; ?>">
-                    <i class="fas fa-home"></i>
-                    Início
-                </a>
-                
-                <a href="minhas_apostas.php" class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'minhas_apostas.php' ? 'active' : ''; ?>">
-                    <i class="fas fa-ticket-alt"></i>
-                    Minhas Apostas
-                </a>
-                
-                <a href="logout.php" class="nav-link btn-sair">
-                    <i class="fas fa-sign-out-alt"></i>
-                    Sair
-                </a>
-            <?php endif; ?>
-        </nav>
-    </header>
-
-    <!-- Conteúdo Principal -->
-    <main class="main-content">
-        <!-- Hero Section -->
-        <section class="hero">
-            <h1>Aposte e Ganhe na Loteria Online</h1>
-            <p>Faça suas apostas de forma rápida, segura e com as melhores chances de ganhar!</p>
-            <a href="register.php" class="cta-button">Comece a Apostar</a>
-        </section>
-
-        <!-- Grid de Jogos -->
-        <div class="games-grid">
-            <?php foreach($jogos as $index => $jogo): 
-                $colorIndex = $index % count($cardColors);
-            ?>
-                <div class="game-card color-<?php echo $colorIndex; ?>">
-                    <div class="game-header">
-                        <h2 class="game-title">
-                            <i class="fas fa-star"></i>
-                            <?php echo htmlspecialchars($jogo['nome']); ?>
-                        </h2>
-                        <p class="game-subtitle">
-                            <i class="fas fa-check-circle"></i>
-                            Escolha <?php echo $jogo['dezenas_premiar']; ?> números
-                        </p>
-                        <div class="status-badge">
-                            <i class="fas fa-fire"></i> Ativo
-                        </div>
-                    </div>
-                    
-                    <div class="game-body">
-                        <div class="game-description">
-                            Aposte em <?php echo $jogo['dezenas_premiar']; ?> números entre 1 e <?php echo $jogo['total_numeros']; ?> 
-                            e concorra a prêmios incríveis! Quanto mais você apostar, maiores suas chances de ganhar.
-                        </div>
-                        
-                        <div class="game-info-grid">
-                            <div class="game-stat">
-                                <span class="stat-label">Total de Números</span>
-                                <span class="stat-value">
-                                    <i class="fas fa-hashtag"></i>
-                                    <?php echo $jogo['total_numeros']; ?>
-                                </span>
-                            </div>
-                            
-                            <div class="game-stat">
-                                <span class="stat-label">Apostas Realizadas</span>
-                                <span class="stat-value">
-                                    <i class="fas fa-users"></i>
-                                    <?php echo number_format($jogo['total_apostas'], 0, ',', '.'); ?>
-                                </span>
-                            </div>
-                            
-                            <div class="game-stat">
-                                <span class="stat-label">Valor da Aposta</span>
-                                <span class="stat-value">
-                                    <i class="fas fa-ticket-alt"></i>
-                                    A partir de R$ <?php echo number_format($jogo['valor_aposta_min'] ?? 0, 2, ',', '.'); ?>
-                                </span>
-                            </div>
-                            
-                            <div class="game-stat">
-                                <span class="stat-label">Chance de Ganhar</span>
-                                <span class="stat-value">
-                                    <i class="fas fa-percentage"></i>
-                                    1 em <?php echo number_format($jogo['total_numeros'] / $jogo['dezenas_premiar'], 0, ',', '.'); ?>
-                                </span>
-                            </div>
-                        </div>
-                        
-                        <div class="last-winners">
-                            <span class="winners-count">
-                                <?php echo rand(1, 5); ?> ganhadores
-                            </span> 
-                            nos últimos 7 dias
-                        </div>
-                    </div>
-                    
-                    <div class="game-footer">
-                        <div class="prize-info">
-                            <span class="prize-label">Prêmio Máximo</span>
-                            <span class="prize-value">
-                                R$ <?php echo number_format($jogo['valor_premio_max'] ?? 0, 2, ',', '.'); ?>
-                            </span>
-                        </div>
-                        
-                        <?php if (isset($_SESSION['usuario_id'])): ?>
-                            <button type="button" class="play-button" data-bs-toggle="modal" data-bs-target="#modalAposta<?php echo $jogo['id']; ?>" data-numero-maximo="<?php echo $jogo['dezenas_premiar']; ?>" data-valor-aposta="<?php echo $jogo['valor']; ?>">
-                                <i class="fas fa-play-circle"></i>
-                                Apostar Agora
-                            </button>
-                        <?php else: ?>
-                            <a href="./login.php?redirect=apostador/fazer_aposta&jogo_id=<?php echo $jogo['id']; ?>" class="play-button">
-                                <i class="fas fa-play-circle"></i>
-                                Apostar Agora
-                            </a>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <!-- Modal de Apostas -->
-                <div class="modal fade" id="modalAposta<?php echo $jogo['id']; ?>" 
-                     data-numero-maximo="<?php echo $jogo['dezenas_premiar']; ?>"
-                     data-valor-aposta="<?php echo $jogo['valor']; ?>"
-                     tabindex="-1" 
-                     aria-hidden="true">
-                    <div class="modal-dialog modal-lg modal-dialog-centered">
-                        <div class="modal-content">
-                            <div class="modal-header" style="background: linear-gradient(135deg, #4e73df, #224abe); color: white;">
-                                <h5 class="modal-title">
-                                    <i class="fas fa-star me-2"></i>
-                                    <?php echo htmlspecialchars($jogo['nome']); ?>
-                                </h5>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                            </div>
-                            
-                            <!-- Banner do Jogo -->
-                            <div class="game-banner p-4 text-center bg-light">
-                                <div class="prize-highlight mb-3">
-                                    <div class="prize-label">Prêmio Máximo</div>
-                                    <div class="prize-value">R$ <?php echo number_format($jogo['premio'], 2, ',', '.'); ?></div>
-                                </div>
-                                <div class="game-rules">
-                                    <span class="badge bg-primary me-2">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        Escolha <?php echo $jogo['dezenas_premiar']; ?> números
-                                    </span>
-                                    <span class="badge bg-success">
-                                        <i class="fas fa-dollar-sign me-1"></i>
-                                        Valor: R$ <?php echo number_format($jogo['valor'], 2, ',', '.'); ?>
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div class="modal-body">
-                                <!-- Instruções -->
-                                <div class="instructions alert alert-info mb-4">
-                                    <h6 class="alert-heading">
-                                        <i class="fas fa-lightbulb me-2"></i>
-                                        Como Jogar
-                                    </h6>
-                                    <ul class="mb-0">
-                                        <li>Selecione exatamente <?php echo $jogo['dezenas_premiar']; ?> números</li>
-                                        <li>Os números vão de 1 até <?php echo $jogo['total_numeros']; ?></li>
-                                        <li>Quanto mais acertos, maior o prêmio</li>
-                                        <li>Boa sorte!</li>
-                                    </ul>
-                                </div>
-
-                                <!-- Grid de Números -->
-                                <div class="numbers-container">
-                                    <h6 class="section-title mb-3">
-                                        <i class="fas fa-th me-2"></i>
-                                        Escolha seus números
-                                    </h6>
-                                    <div class="numeros-grid" id="numerosGrid<?php echo $jogo['id']; ?>">
-                                        <?php for($i = 1; $i <= $jogo['total_numeros']; $i++): ?>
-                                            <button class="numero-btn" data-numero="<?php echo $i; ?>">
-                                                <?php echo str_pad($i, 2, '0', STR_PAD_LEFT); ?>
-                                            </button>
-                                        <?php endfor; ?>
-                                    </div>
-                                </div>
-
-                                <!-- Números Selecionados -->
-                                <div class="selected-numbers mt-4">
-                                    <h6 class="section-title mb-3">
-                                        <i class="fas fa-check-circle me-2"></i>
-                                        Números Selecionados
-                                    </h6>
-                                    <div class="selected-display" id="selectedNumbers<?php echo $jogo['id']; ?>">
-                                        <div class="placeholder">Nenhum número selecionado</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="modal-footer bg-light">
-                                <div class="d-flex justify-content-between align-items-center w-100">
-                                    <div class="bet-info">
-                                        <span class="selected-count">0</span> de <?php echo $jogo['dezenas_premiar']; ?> números selecionados
-                                    </div>
-                                    <div class="action-buttons">
-                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
-                                            <i class="fas fa-times me-2"></i>
-                                            Cancelar
-                                        </button>
-                                        <button type="button" class="btn btn-primary" id="btnConfirmarAposta<?php echo $jogo['id']; ?>" disabled>
-                                            <i class="fas fa-check me-2"></i>
-                                            Confirmar Aposta
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <img src="assets/img/logo.png" alt="LotoMinas" class="img-fluid">
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/apostador">Área do Apostador</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/revendedor">Revendedor</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin">Admin</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link btn btn-light text-primary ms-2 px-4" href="/cadastro">Cadastre-se</a>
+                    </li>
+                </ul>
+            </div>
         </div>
-    </main>
+    </nav>
 
+    <!-- Banner Rotativo -->
+    <div class="swiper">
+        <div class="swiper-wrapper">
+            <div class="swiper-slide" style="background-image: linear-gradient(rgba(3, 166, 77, 0.7), rgba(45, 142, 89, 0.7)), url('assets/img/banner/banner1.jpg');">
+                <div class="banner-content">
+                    <h2>Bem-vindo ao LotoMinas</h2>
+                    <p>Aposte nos melhores jogos e concorra a prêmios incríveis!</p>
+                    <a href="/apostador" class="btn btn-primary btn-custom">Comece a Apostar</a>
+                </div>
+            </div>
+            <div class="swiper-slide" style="background-image: linear-gradient(rgba(3, 166, 77, 0.7), rgba(45, 142, 89, 0.7)), url('assets/img/banner/banner2.jpg');">
+                <div class="banner-content">
+                    <h2>Prêmios Garantidos</h2>
+                    <p>Milhares de ganhadores toda semana no LotoMinas. O próximo pode ser você!</p>
+                    <a href="/cadastro" class="btn btn-success btn-custom">Cadastre-se Agora</a>
+                </div>
+            </div>
+            <div class="swiper-slide" style="background-image: linear-gradient(rgba(3, 166, 77, 0.7), rgba(45, 142, 89, 0.7)), url('assets/img/banner/banner3.jpg');">
+                <div class="banner-content">
+                    <h2>Jogos Exclusivos</h2>
+                    <p>As melhores chances de ganhar estão aqui no LotoMinas!</p>
+                    <a href="/jogos" class="btn btn-warning btn-custom">Ver Jogos</a>
+                </div>
+            </div>
+        </div>
+        <div class="swiper-pagination"></div>
+        <!-- Adicionar navegação -->
+        <div class="swiper-button-next"></div>
+        <div class="swiper-button-prev"></div>
+    </div>
+
+    <!-- Jogos em Destaque -->
+    <section class="py-5">
+        <div class="container-fluid px-4">
+            <div class="section-title">
+                <h2>Jogos em Destaque</h2>
+                <p>Escolha seu jogo favorito e comece a ganhar</p>
+            </div>
+            
+            <div class="row">
+                <?php foreach ($jogos as $index => $jogo): 
+                    $currentColor = $cardColors[$index % count($cardColors)];
+                ?>
+                    <div class="col-jogos" style="flex: 0 0 14.285714%; max-width: 14.285714%;">
+                        <div class="game-card">
+                            <div class="card-header" style="background: <?php echo $currentColor['gradient']; ?>">
+                                <h3 class="mb-0"><?php echo htmlspecialchars($jogo['nome']); ?></h3>
+                            </div>
+                            <div class="game-info">
+                                <div class="prize-container">
+                                    <span class="prize-value" style="color: <?php echo $currentColor['accent']; ?>">
+                                        R$ <?php echo number_format($jogo['valor_premio_max'], 2, ',', '.'); ?>
+                                    </span>
+                                    <span class="prize-label">Prêmio Máximo</span>
+                                </div>
+                                
+                                <div class="game-stats">
+                                    <div class="game-stat-item">
+                                        <i class="fas fa-trophy" style="background: <?php echo $currentColor['accent']; ?>20; color: <?php echo $currentColor['accent']; ?>"></i>
+                                        <span><?php echo $jogo['ganhadores_semana']; ?> ganhadores</span>
+                                    </div>
+                                    <div class="game-stat-item">
+                                        <i class="fas fa-ticket-alt" style="background: <?php echo $currentColor['accent']; ?>20; color: <?php echo $currentColor['accent']; ?>"></i>
+                                        <span>R$ <?php echo number_format($jogo['valor_aposta_min'], 2, ',', '.'); ?></span>
+                                    </div>
+                                </div>
+                                
+                                <a href="/apostador/jogar/<?php echo $jogo['id']; ?>" class="btn btn-apostar" style="background: <?php echo $currentColor['gradient']; ?>">
+                                    Apostar <i class="fas fa-arrow-right"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="feature-item">
+                        <i class="fas fa-shield-alt feature-icon"></i>
+                        <h4>100% Seguro</h4>
+                        <p>Suas apostas são protegidas e seus dados estão seguros conosco.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-item">
+                        <i class="fas fa-money-bill-wave feature-icon"></i>
+                        <h4>Pagamento Rápido</h4>
+                        <p>Receba seus prêmios de forma rápida e segura.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="feature-item">
+                        <i class="fas fa-headset feature-icon"></i>
+                        <h4>Suporte 24/7</h4>
+                        <p>Nossa equipe está sempre pronta para ajudar você.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-4">
+                    <h5>Sobre o LotoMinas</h5>
+                    <p>Sistema de loteria confiável e transparente, oferecendo as melhores chances de ganhar em Minas Gerais.</p>
+                </div>
+                <div class="col-md-4">
+                    <h5>Links Rápidos</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="/como-jogar" class="text-white">Como Jogar</a></li>
+                        <li><a href="/resultados" class="text-white">Resultados</a></li>
+                        <li><a href="/regulamento" class="text-white">Regulamento</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h5>Contato</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-envelope me-2"></i> contato@loteria.test</li>
+                        <li><i class="fas fa-phone me-2"></i> (00) 0000-0000</li>
+                    </ul>
+                </div>
+            </div>
+            <hr class="mt-4 mb-4 border-light">
+            <div class="text-center">
+                <p class="mb-0">&copy; 2024 LotoMinas. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.js"></script>
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Função para inicializar cada modal de jogo
-        function initializeGameModal(jogoId, numeroMaximo) {
-            const numerosGrid = document.getElementById(`numerosGrid${jogoId}`);
-            const btnConfirmar = document.getElementById(`btnConfirmarAposta${jogoId}`);
-            const selectedDisplay = document.getElementById(`selectedNumbers${jogoId}`);
-            let numerosEscolhidos = [];
-
-            function atualizarDisplay() {
-                selectedDisplay.innerHTML = '';
-                if (numerosEscolhidos.length === 0) {
-                    selectedDisplay.innerHTML = '<div class="placeholder">Nenhum número selecionado</div>';
-                } else {
-                    numerosEscolhidos.sort((a, b) => a - b).forEach(numero => {
-                        const div = document.createElement('div');
-                        div.className = 'selected-number';
-                        div.textContent = String(numero).padStart(2, '0');
-                        selectedDisplay.appendChild(div);
-                    });
-                }
-
-                // Atualizar contador no modal específico
-                const countElements = document.querySelectorAll(`#modalAposta${jogoId} .selected-count`);
-                countElements.forEach(el => el.textContent = numerosEscolhidos.length);
-
-                // Habilitar/desabilitar botão confirmar
-                btnConfirmar.disabled = numerosEscolhidos.length !== numeroMaximo;
+        const swiper = new Swiper('.swiper', {
+            loop: true,
+            autoplay: {
+                delay: 5000,
+                disableOnInteraction: false,
+            },
+            pagination: {
+                el: '.swiper-pagination',
+                clickable: true,
+            },
+            navigation: {
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+            },
+            effect: 'fade',
+            fadeEffect: {
+                crossFade: true
             }
-
-            if (numerosGrid) {
-                numerosGrid.addEventListener('click', function(e) {
-                    if (e.target.classList.contains('numero-btn')) {
-                        const numero = parseInt(e.target.dataset.numero);
-                        
-                        if (e.target.classList.contains('selected')) {
-                            e.target.classList.remove('selected');
-                            numerosEscolhidos = numerosEscolhidos.filter(n => n !== numero);
-                        } else if (numerosEscolhidos.length < numeroMaximo) {
-                            e.target.classList.add('selected');
-                            numerosEscolhidos.push(numero);
-                        }
-                        
-                        atualizarDisplay();
-                    }
-                });
-            }
-
-            if (btnConfirmar) {
-                btnConfirmar.addEventListener('click', function() {
-                    if (numerosEscolhidos.length === numeroMaximo) {
-                        // Mostrar loading
-                        Swal.fire({
-                            title: 'Processando...',
-                            text: 'Salvando sua aposta',
-                            allowOutsideClick: false,
-                            showConfirmButton: false,
-                            willOpen: () => {
-                                Swal.showLoading();
-                            }
-                        });
-
-                        // Enviar aposta
-                        fetch('ajax/salvar_aposta.php', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                jogo_id: jogoId,
-                                numeros: numerosEscolhidos.sort((a, b) => a - b),
-                                valor: document.querySelector(`#modalAposta${jogoId}`).dataset.valorAposta
-                            })
-                        })
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error('Erro na requisição');
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            if (data.success) {
-                                // Fechar o modal de aposta
-                                const modalInstance = bootstrap.Modal.getInstance(document.getElementById(`modalAposta${jogoId}`));
-                                modalInstance.hide();
-
-                                // Mostrar mensagem de sucesso
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Aposta Realizada!',
-                                    text: 'Sua aposta foi registrada com sucesso.',
-                                    showDenyButton: true,
-                                    confirmButtonText: 'Ver Minhas Apostas',
-                                    denyButtonText: 'Fazer Nova Aposta',
-                                    allowOutsideClick: false
-                                }).then((result) => {
-                                    if (result.isConfirmed) {
-                                        window.location.href = 'minhas_apostas.php';
-                                    } else {
-                                        location.reload();
-                                    }
-                                });
-                            } else {
-                                throw new Error(data.message || 'Erro ao realizar aposta');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Erro:', error);
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'Ops!',
-                                text: error.message || 'Ocorreu um erro ao processar sua aposta. Tente novamente.',
-                                confirmButtonText: 'Tentar Novamente'
-                            });
-                        });
-                    }
-                });
-            }
-
-            // Reset modal ao fechar
-            const modal = document.getElementById(`modalAposta${jogoId}`);
-            if (modal) {
-                modal.addEventListener('hidden.bs.modal', function () {
-                    numerosEscolhidos = [];
-                    modal.querySelectorAll('.numero-btn').forEach(btn => btn.classList.remove('selected'));
-                    atualizarDisplay();
-                });
-            }
-        }
-
-        // Inicializar todos os modais de jogos
-        document.querySelectorAll('[id^="modalAposta"]').forEach(modal => {
-            const jogoId = modal.id.replace('modalAposta', '');
-            const numeroMaximo = parseInt(modal.dataset.numeroMaximo);
-            initializeGameModal(jogoId, numeroMaximo);
         });
-    });
     </script>
 </body>
 </html>
 
-<?php require_once 'includes/footer.php'; ?> 
+<?php require_once 'includes/layout.php'; ?> 

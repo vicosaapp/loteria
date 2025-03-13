@@ -1,0 +1,61 @@
+Loterias Mobile: TM  Funcionando
+Loterias Mobile: LF  Funcionando
+Loterias Mobile: LM  Funcionando
+Loterias Mobile: MS  Funcionando
+Loterias Mobile: DI  Funcionando
+Loterias Mobile: QN  Funcionando
+Loterias Mobile: MM  Funcionando
+
+
+Loterias Mobile: LF
+
+01 02 03 04 05 07 08 09 11 12 13 15 16 18 19 21 22 23
+01 03 05 06 07 08 09 10 12 13 14 16 18 19 20 22 23 24
+02 03 04 05 07 08 10 11 13 15 16 18 19 20 21 22 23 25
+03 04 05 07 08 09 11 12 14 15 16 18 19 21 22 23 24 25
+
+
+O valor da premiação deve ser 1600 nesse caso, porq a premiação é referente 
+a uma só aposta (independente da quantidade de apostas).
+
+E tem q aparecer o mesmo valor na página de gerenciar aposta
+
+A aposta só vale de 22:00 até 18:59 (as apostas ficarão avermelhadas as 21:30 de cada dia indicando que a aposta está vencida, e serão excluídas automaticamente após 48 horas)
+
+Anexar horário de sorteio no comprovante
+
+Criar uma página de informação das regras
+
+Ativar a página de Configurações do Sistema
+ Rua dr. milton 311 loja 1 Naja
+
+
+Loterias Mobile: MS
+
+03 05 07 10 11 18 19 20 22 25 33 35 42 44 47 49 51 53 58 59
+[17:07, 03/02/2025] +55 35 8811-1615: Mega sena
+[17:07, 03/02/2025] +55 35 8811-1615: Jogando 20 dezenas pra acertar 6
+[17:09, 03/02/2025] +55 35 8811-1615: Loterias Mobile: MM
+
+12 13 19 28 38 46 4 5
+[17:10, 03/02/2025] +55 35 8811-1615: Mais milionária 👆
+[17:10, 03/02/2025] +55 35 8811-1615: Tem que acertar 6 dzs
+[17:11, 03/02/2025] +55 35 8811-1615: Loterias Mobile: QN
+
+18 36 38 67 68
+[17:11, 03/02/2025] +55 35 8811-1615: 👆quina
+[17:11, 03/02/2025] +55 35 8811-1615: Acertar 5 dezenas
+
+[17:13, 03/02/2025] +55 35 8811-1615: Loterias Mobile: LM
+
+00 01 03 06 08 10 12 14 15 17 21 22 25 28 29 31 33 35 36 37 38 39 42 43 44 45 51 52 53 54 56 57 58 59 60 64 65 66 69 72 74 75 77 79 83 84 85 87 93 94
+[17:13, 03/02/2025] +55 35 8811-1615: Lotomania
+[17:13, 03/02/2025] +55 35 8811-1615: Tem que acertar 20 dzs
+[17:18, 03/02/2025] +55 35 8811-1615: Loterias Mobile: DI
+
+12 15 17 19 24 25 30 Mês: 1
+[17:18, 03/02/2025] +55 35 8811-1615: Dia de sorte 
+Acertar 7 dezena s
+[17:21, 03/02/2025] +55 35 8811-1615: Loterias Mobile: TM
+
+12 14 17 29 33 36 48 54 67 69 Time: ABC/RN

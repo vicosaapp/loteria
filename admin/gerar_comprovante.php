@@ -1,158 +1,313 @@
 <?php
-require_once '../config/database.php';
-require_once __DIR__ . '/../lib/fpdf/fpdf.php';
+// Limpar qualquer saída anterior
+ob_clean();
+if (ob_get_length()) ob_end_clean();
 
-class ComprovantePDF extends FPDF {
-    function Header() {
-        // Usando helvetica (que é a fonte padrão)
-        $this->SetFont('Helvetica', 'B', 16);
-        
-        // Cabeçalho com fundo azul
-        $this->SetFillColor(0, 51, 153);
-        $this->SetTextColor(255, 255, 255);
-        $this->Cell(0, 15, utf8_decode('COMPROVANTE DE APOSTAS'), 0, 1, 'C', true);
-        
-        // Linha decorativa
-        $this->SetLineWidth(0.5);
-        $this->SetDrawColor(255, 215, 0);
-        $this->Line(10, 25, 200, 25);
-    }
-    
-    function Footer() {
-        $this->SetY(-15);
-        $this->SetFont('Helvetica', 'I', 8);
-        $this->SetTextColor(128);
-        $this->Cell(0, 10, utf8_decode('Página ') . $this->PageNo(), 0, 0, 'C');
-    }
+// Prevenir qualquer saída antes do PDF
+error_reporting(0);
+ini_set('display_errors', 0);
+
+// Garante que nenhum conteúdo foi enviado antes
+if (headers_sent()) {
+    die('Já foram enviados headers');
 }
 
-// Recebe os parâmetros
-$usuario_id = $_GET['usuario_id'] ?? null;
-$jogo_nome = $_GET['jogo'] ?? null;
+// Inicia o buffer de saída
+ob_start();
 
-if (!$usuario_id || !$jogo_nome) {
+session_start();
+require_once '../config/database.php';
+require_once '../vendor/setasign/fpdf/fpdf.php';
+
+// Verifica se é admin
+if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
+    header("Location: ../login.php");
+    exit();
+}
+
+// Validar parâmetros
+if (!isset($_GET['usuario_id']) || !isset($_GET['jogo'])) {
     die('Parâmetros inválidos');
 }
 
-// Busca as informações incluindo o valor_premio
-$stmt = $pdo->prepare("
-    SELECT 
-        ai.numeros,
-        ai.valor_aposta,
-        ai.valor_premio,
-        ai.created_at,
-        u.nome as apostador_nome,
-        u.whatsapp,
-        r.nome as revendedor_nome
-    FROM apostas_importadas ai
-    LEFT JOIN usuarios u ON ai.usuario_id = u.id
-    LEFT JOIN usuarios r ON ai.revendedor_id = r.id
-    WHERE ai.usuario_id = ? AND ai.jogo_nome = ?
-    ORDER BY ai.created_at DESC
-");
+$usuario_id = (int)$_GET['usuario_id'];
+$jogo = $_GET['jogo'];
 
-$stmt->execute([$usuario_id, $jogo_nome]);
-$apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Buscar todas as apostas do usuário para o jogo específico
+$sql = "SELECT ai.*, u.nome as apostador, r.nome as revendedor, j.nome as jogo_nome
+        FROM apostas_importadas ai
+        LEFT JOIN usuarios u ON ai.usuario_id = u.id
+        LEFT JOIN usuarios r ON ai.revendedor_id = r.id
+        LEFT JOIN jogos j ON j.titulo_importacao = ai.jogo_nome
+        WHERE ai.usuario_id = ? 
+        AND j.nome = ?
+        ORDER BY ai.created_at DESC";
 
-// Debug para ver os valores
-error_log('Dados das apostas: ' . print_r($apostas, true));
-
+            $stmt = $pdo->prepare($sql);
+$stmt->execute([$usuario_id, $jogo]);
+            $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            
 if (empty($apostas)) {
-    die('Nenhuma aposta encontrada');
+    die('Apostas não encontradas');
 }
 
-// Cria PDF
-$pdf = new ComprovantePDF();
-$pdf->AddPage();
-$pdf->SetMargins(10, 10, 10);
+// Usar a primeira aposta para informações gerais
+$aposta = $apostas[0];
 
-// Informações do apostador
-$pdf->SetFont('Helvetica', 'B', 12);
-$pdf->SetTextColor(0);
-$pdf->Cell(0, 10, '', 0, 1);
-$pdf->Cell(0, 8, utf8_decode('DADOS DO APOSTADOR'), 1, 1, 'C', true);
-$pdf->SetFont('Helvetica', '', 11);
-$pdf->Cell(40, 8, 'Nome:', 0, 0);
-$pdf->Cell(0, 8, utf8_decode($apostas[0]['apostador_nome']), 0, 1);
-$pdf->Cell(40, 8, 'WhatsApp:', 0, 0);
-$pdf->Cell(0, 8, $apostas[0]['whatsapp'], 0, 1);
-$pdf->Cell(40, 8, 'Revendedor:', 0, 0);
-$pdf->Cell(0, 8, utf8_decode($apostas[0]['revendedor_nome'] ?: 'Admin'), 0, 1);
-$pdf->Cell(40, 8, 'Data/Hora:', 0, 0);
-$pdf->Cell(0, 8, date('d/m/Y H:i', strtotime($apostas[0]['created_at'])), 0, 1);
 
-// Nome do Jogo
-$pdf->Ln(5);
-$pdf->SetFont('Helvetica', 'B', 14);
-$pdf->Cell(0, 10, utf8_decode($jogo_nome), 0, 1, 'C');
+// Buscar informações do jogo
+$sql_jogo = "SELECT j.nome, j.titulo_importacao,
+                    vj.valor_premio, vj.dezenas, vj.valor_aposta
+             FROM jogos j
+             INNER JOIN valores_jogos vj ON j.id = vj.jogo_id
+             WHERE j.id = 3 
+             AND vj.dezenas = 18 
+             AND vj.valor_aposta = 1.00";
 
-// Apostas
-$pdf->Ln(5);
-$pdf->SetFont('Helvetica', 'B', 12);
-$pdf->Cell(0, 8, utf8_decode('NÚMEROS APOSTADOS'), 1, 1, 'C', true);
+$stmt_jogo = $pdo->prepare($sql_jogo);
+$stmt_jogo->execute();
+$info_jogo = $stmt_jogo->fetch(PDO::FETCH_ASSOC);
 
-foreach ($apostas as $index => $aposta) {
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->Cell(0, 8, 'Aposta ' . ($index + 1), 0, 1);
+// Definir valores fixos para o que não está na tabela
+$info_jogo['codigo_concurso'] = '007';
+
+// Calcular o ganho máximo (soma de todas as apostas)
+$ganho_maximo = 0;
+foreach ($apostas as $aposta) {
+    $ganho_maximo += 1600.00; // Valor fixo do prêmio para cada aposta
+}
+
+// Processar os números da aposta
+$linhas = explode("\n", trim($aposta['numeros']));
+array_shift($linhas); // Remove a primeira linha (título do importador)
+
+// Para cada linha de aposta
+foreach ($linhas as $i => $linha) {
+    // Remover qualquer texto que não seja número
+    $linha = preg_replace('/[^0-9\s]/', '', $linha);
+    $numeros = array_filter(explode(' ', trim($linha)));
     
-    // Números em grid
-    $numeros = explode(' ', $aposta['numeros']);
-    $pdf->SetFont('Courier', '', 11);
-    
-    foreach ($numeros as $i => $numero) {
-        $pdf->SetFillColor(240, 240, 240);
-        $pdf->Cell(8, 8, $numero, 1, ($i + 1) % 20 == 0 ? 1 : 0, 'C', true);
-        if (($i + 1) % 20 == 0) {
-            $pdf->Ln();
+    if (!empty($numeros)) {
+        echo "<div class='aposta'>";
+        echo "<h4>Aposta " . ($i + 1) . "</h4>";
+        echo "<div class='numeros'>";
+        foreach ($numeros as $numero) {
+            // Garantir que o número tenha 2 dígitos
+            $numero_formatado = str_pad($numero, 2, '0', STR_PAD_LEFT);
+            echo "<span class='numero'>" . $numero_formatado . "</span>";
         }
+        echo "</div>";
+        echo "</div>";
     }
-    if (count($numeros) % 20 != 0) {
-        $pdf->Ln();
-    }
-    $pdf->Ln(4);
 }
 
-// Valor e Premiação
-$pdf->SetFont('Helvetica', 'B', 12);
-$total_apostas = count($apostas);
-$valor_total = array_sum(array_column($apostas, 'valor_aposta'));
-$valor_premio = floatval($apostas[0]['valor_premio'] ?? 0); // Convertendo para float
-
-error_log('Valor da premiação: ' . $valor_premio); // Debug do valor
-
-$pdf->Cell(0, 8, 'RESUMO', 1, 1, 'C', true);
-$pdf->SetFont('Helvetica', '', 11);
-
-// Quantidade de apostas
-$pdf->Cell(60, 8, utf8_decode('Quantidade de Apostas:'), 0, 0);
-$pdf->Cell(0, 8, $total_apostas, 0, 1);
-
-// Valor total apostado
-$pdf->Cell(60, 8, 'Valor Total Apostado:', 0, 0);
-$pdf->Cell(0, 8, 'R$ ' . number_format($valor_total, 2, ',', '.'), 0, 1);
-
-// Valor da premiação
-$pdf->SetFont('Helvetica', 'B', 11);
-$pdf->Cell(60, 8, utf8_decode('Valor da Premiação:'), 0, 0);
-$pdf->SetTextColor(0, 102, 0); // Verde escuro
-$pdf->Cell(0, 8, 'R$ ' . number_format($valor_premio, 2, ',', '.'), 0, 1);
-$pdf->SetTextColor(0); // Volta para preto
-
-// Adiciona uma nota sobre a premiação
-$pdf->SetFont('Helvetica', 'I', 9);
-$pdf->Ln(2);
-$pdf->MultiCell(0, 5, utf8_decode('* O valor da premiação será pago integralmente ao apostador que acertar todos os números.'), 0, 'L');
-
-// Código de validação
-$pdf->Ln(5);
-$pdf->SetFont('Helvetica', 'B', 8);
-$pdf->Cell(0, 8, utf8_decode('Código de Validação'), 0, 1, 'C');
-$pdf->Cell(0, 8, date('YmdHis') . str_pad($usuario_id, 6, '0', STR_PAD_LEFT), 0, 1, 'C');
-
-// Data e hora da impressão
-$pdf->SetFont('Helvetica', 'I', 8);
-$pdf->Ln(5);
-$pdf->Cell(0, 5, utf8_decode('Comprovante gerado em: ') . date('d/m/Y H:i:s'), 0, 1, 'C');
-
-// Gera o PDF
-$pdf->Output('Comprovante_' . date('YmdHis') . '.pdf', 'I'); 
+?>
+<!DOCTYPE html>
+                <html>
+                <head>
+    <meta charset="utf-8">
+    <title>Comprovante de Aposta - <?php echo $jogo; ?></title>
+                    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: url('assets/images/bg-comprovante.png') no-repeat center center;
+            background-size: cover;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.15);
+            position: relative;
+            color: #333;
+        }
+        .overlay {
+            background: rgba(255, 255, 255, 0.57);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(0, 123, 255, 0.1);
+            border-radius: 10px;
+            border: 2px solid #007bff;
+        }
+        .logo {
+            max-width: 400px;
+            width: 100%;
+            height: auto;
+            margin: 0 auto;
+            display: block;
+            padding: 10px;
+        }
+        .header h2 {
+            color: #0056b3;
+            margin: 10px 0 0;
+        }
+        .info-block {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .info-row strong {
+            color:rgb(0, 0, 0);
+        }
+        .numbers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 20px 0;
+            justify-content: center;
+        }
+        .number {
+            background:rgb(0, 44, 90);
+            color: white;
+            padding: 12px;
+            border-radius: 50%;
+            font-weight: bold;
+            min-width: 20px;
+            height: 20px;
+            line-height: 20px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .game-info {
+            background: rgba(0, 123, 255, 0.05);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border: 1px solid #007bff;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+            color: #495057;
+        }
+        .aposta-grupo {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+        .aposta-grupo h4 {
+            color: #0056b3;
+            margin: 0 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .numbers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 10px 0;
+            justify-content: flex-start;
+        }
+        .number {
+            background: #007bff;
+            color: white;
+            padding: 10px;
+            border-radius: 50%;
+            font-weight: bold;
+            min-width: 18px;
+            height: 18px;
+            line-height: 18px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+                    </style>
+                </head>
+                <body>
+    <div class="container">
+        <div class="overlay">
+                    <div class="header">
+                <img src="assets/images/logo.png" alt="Logo" class="logo">
+                <h2>Nome do jogo:<?php echo $aposta['jogo_nome']; ?></h2>
+                    </div>
+                    
+            <div class="info-block">
+                <div class="info-row">
+                    <strong>Data e hora:</strong>
+                    <span><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></span>
+                </div>
+                <div class="info-row">
+                    <strong>Apostador:</strong>
+                    <span><?php echo $aposta['apostador']; ?></span>
+                </div>
+                <div class="info-row">
+                    <strong>Revendedor:</strong>
+                    <span><?php echo $aposta['revendedor']; ?></span>
+                </div>
+                <div class="info-row">
+                    <strong>Valor da Aposta:</strong>
+                    <span>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></span>
+                </div>
+                    </div>
+                    
+            <div class="info-block">
+                <h3>Apostas Realizadas</h3>
+                <?php foreach ($apostas as $index => $aposta_atual): ?>
+                    <div class="aposta-grupo">
+                        <h4>Aposta <?php echo $index + 1; ?></h4>
+                        <div class="numbers">
+                            <?php 
+                            $numeros_aposta = array_filter(explode(' ', trim($aposta_atual['numeros'])));
+                            sort($numeros_aposta, SORT_NUMERIC);
+                            foreach ($numeros_aposta as $numero): 
+                            ?>
+                                <div class="number"><?php echo $numero; ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+                    </div>
+                    
+            <div class="game-info">
+                <h3>Informações do Jogo</h3>
+                <div class="info-row">
+                    <strong>Números Necessários:</strong>
+                    <span>15 números</span>
+                </div>
+                <div class="info-row">
+                    <strong>Prêmio por Aposta:</strong>
+                    <span>R$ 1.600,00</span>
+                </div>
+                <div class="info-row">
+                    <strong>Ganho Máximo:</strong>
+                    <span>R$ <?php echo number_format($ganho_maximo, 2, ',', '.'); ?></span>
+                </div>
+                <div class="info-row">
+                    <strong>Concurso:</strong>
+                    <span><?php echo $info_jogo['codigo_concurso']; ?></span>
+                </div>
+                    </div>
+                    
+                    <div class="footer">
+                <p><strong>ID da aposta:</strong> <?php echo $aposta['id']; ?></p>
+                <p>Este comprovante é sua garantia. Guarde-o com cuidado.</p>
+                <p><small>Gerado em: <?php echo date('d/m/Y H:i:s'); ?></small></p>
+            </div>
+        </div>
+                    </div>
+                </body>
+</html>

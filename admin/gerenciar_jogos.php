@@ -11,14 +11,55 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
 // Define a página atual para o menu
 $currentPage = 'jogos';
 
+// Processar exclusão de jogo
+if (isset($_POST['excluir']) && isset($_POST['jogo_id'])) {
+    try {
+        $jogo_id = intval($_POST['jogo_id']);
+        
+        // Inicia a transação
+        $pdo->beginTransaction();
+        
+        // Primeiro, exclui os números sorteados relacionados
+        $stmt = $pdo->prepare("DELETE ns FROM numeros_sorteados ns 
+                              INNER JOIN concursos c ON ns.concurso_id = c.id 
+                              WHERE c.jogo_id = ?");
+        $stmt->execute([$jogo_id]);
+        
+        // Depois, exclui os concursos
+        $stmt = $pdo->prepare("DELETE FROM concursos WHERE jogo_id = ?");
+        $stmt->execute([$jogo_id]);
+        
+        // Por fim, exclui o jogo
+        $stmt = $pdo->prepare("DELETE FROM jogos WHERE id = ?");
+        $stmt->execute([$jogo_id]);
+        
+        // Confirma a transação
+        $pdo->commit();
+        
+        $mensagem = "Jogo excluído com sucesso!";
+        $tipo_mensagem = "success";
+    } catch (Exception $e) {
+        // Desfaz a transação em caso de erro
+        $pdo->rollBack();
+        $mensagem = "Erro ao excluir o jogo: " . $e->getMessage();
+        $tipo_mensagem = "danger";
+    }
+}
+
 // Buscar todos os jogos com seus valores
+$pdo->query("SET SESSION group_concat_max_len = 1000000");
+
 $stmt = $pdo->query("
     SELECT j.*, 
-           GROUP_CONCAT(CONCAT(v.valor_aposta, ':', v.dezenas, ':', v.valor_premio) SEPARATOR '|') as valores_info
+           GROUP_CONCAT(
+               CONCAT(v.valor_aposta, ':', v.dezenas, ':', v.valor_premio)
+               ORDER BY v.dezenas ASC, v.valor_aposta ASC
+               SEPARATOR '|'
+           ) as valores_info
     FROM jogos j
     LEFT JOIN valores_jogos v ON j.id = v.jogo_id
     GROUP BY j.id
-    ORDER BY j.id DESC
+    ORDER BY j.nome ASC
 ");
 $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -34,6 +75,12 @@ $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <span>Novo Jogo</span>
         </button>
     </div>
+
+    <?php if (isset($mensagem)): ?>
+        <div class="alert alert-<?php echo $tipo_mensagem; ?>" role="alert">
+            <?php echo $mensagem; ?>
+        </div>
+    <?php endif; ?>
 
     <div class="cards-grid">
         <?php foreach($jogos as $jogo): ?>
@@ -56,34 +103,35 @@ $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     
                     <div class="valores-section">
                         <h4>Valores e Premiações</h4>
-                        <table class="valores-table">
-                            <thead>
-                                <tr>
-                                    <th>Aposta</th>
-                                    <th>Dezenas</th>
-                                    <th>Prêmio</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php 
-                                if (!empty($jogo['valores_info'])) {
-                                    foreach(explode('|', $jogo['valores_info']) as $valor_info) {
-                                        list($valor_aposta, $dezenas, $valor_premio) = explode(':', $valor_info);
-                                        // Convertendo os valores para o formato correto
-                                        $valor_aposta = floatval($valor_aposta) * 100; // Multiplica por 100
-                                        $valor_premio = floatval($valor_premio) * 100; // Multiplica por 100
-                                ?>
-                                    <tr>
-                                        <td>R$ <?php echo number_format($valor_aposta, 2, ',', '.'); ?></td>
-                                        <td><?php echo $dezenas; ?></td>
-                                        <td>R$ <?php echo number_format($valor_premio, 2, ',', '.'); ?></td>
-                                    </tr>
-                                <?php 
-                                    }
-                                } 
-                                ?>
-                            </tbody>
-                        </table>
+                        <?php 
+                        if (!empty($jogo['valores_info'])) {
+                            $valores = explode('|', $jogo['valores_info']);
+                            
+                            // Exibe o cabeçalho colorido
+                            echo '<div class="valores-header">';
+                            echo '<div class="header-aposta">Aposta</div>';
+                            echo '<div class="header-dezenas">Dezenas</div>';
+                            echo '<div class="header-premio">Prêmio</div>';
+                            echo '</div>';
+
+                            echo '<div class="valores-grupo">';
+                            foreach ($valores as $valor_info) {
+                                $partes = explode(':', $valor_info);
+                                if (count($partes) >= 3) {
+                                    $valor_aposta = $partes[0];
+                                    $dezenas = $partes[1];
+                                    $valor_premio = $partes[2];
+                                    
+                                    echo '<div class="valor-row">';
+                                    echo '<div class="valor-aposta">R$ ' . number_format(floatval($valor_aposta), 2, ',', '.') . '</div>';
+                                    echo '<div class="valor-dezenas">' . $dezenas . '</div>';
+                                    echo '<div class="valor-premio">R$ ' . number_format(floatval($valor_premio), 2, ',', '.') . '</div>';
+                                    echo '</div>';
+                                }
+                            }
+                            echo '</div>';
+                        } 
+                        ?>
                     </div>
                 </div>
                 <div class="card-actions">
@@ -91,10 +139,13 @@ $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                         <i class="fas fa-edit"></i>
                         <span>Editar</span>
                     </button>
-                    <button class="btn-delete" onclick="excluirJogo(<?php echo $jogo['id']; ?>)">
-                        <i class="fas fa-trash"></i>
-                        <span>Excluir</span>
-                    </button>
+                    <form method="post" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este jogo? Esta ação não pode ser desfeita.');">
+                        <input type="hidden" name="jogo_id" value="<?php echo $jogo['id']; ?>">
+                        <button type="submit" name="excluir" class="btn-delete">
+                            <i class="fas fa-trash"></i>
+                            <span>Excluir</span>
+                        </button>
+                    </form>
                 </div>
             </div>
         <?php endforeach; ?>
@@ -115,6 +166,20 @@ $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 <div class="form-group">
                     <label for="nome">Nome do Jogo</label>
                     <input type="text" id="nome" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="identificador_importacao">Identificador do Jogo</label>
+                    <input type="text" 
+                           class="form-control" 
+                           id="identificador_importacao" 
+                           name="identificador_importacao" 
+                           placeholder="Ex: Loterias Mobile: LF"
+                           value="<?php echo htmlspecialchars($jogo['identificador_importacao'] ?? ''); ?>"
+                           required>
+                    <small class="form-text text-muted">
+                        Este identificador deve ser exatamente igual à primeira linha do texto importado (ex: "Loterias Mobile: LF")
+                    </small>
                 </div>
 
                 <div class="form-section">
@@ -163,7 +228,7 @@ $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <label>Valor da Aposta</label>
                                     <div class="input-prefix">
                                         <span>R$</span>
-                                        <input type="text" id="novo_valor_aposta" class="form-control money" placeholder="0,00">
+                                        <input type="text" id="novo_valor_aposta" class="form-control money" placeholder="0,00" pattern="^\d*[0-9](|,\d{2})$">
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -177,11 +242,11 @@ $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <label>Valor do Prêmio</label>
                                     <div class="input-prefix">
                                         <span>R$</span>
-                                        <input type="text" id="novo_valor_premio" class="form-control money" placeholder="0,00">
+                                        <input type="text" id="novo_valor_premio" class="form-control money" placeholder="0,00" pattern="^\d*[0-9](|,\d{2})$">
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <button type="button" class="btn btn-add" onclick="adicionarValorTabela()">
+                                    <button type="button" class="btn btn-add" onclick="adicionarValor()">
                                         <i class="fas fa-plus"></i> Adicionar
                                     </button>
                                 </div>
@@ -716,70 +781,59 @@ $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 .valores-section {
     margin-top: 20px;
-    background: #d9d9d9;
+    background: #b1b3b5;
     padding: 15px;
     border-radius: 8px;
 }
 
-.valores-section h4 {
-    color: #4e73df;
-    margin: 0 0 15px 0;
-    font-size: 1.1rem;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #e3e6f0;
+.valores-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 10px;
 }
 
-.valores-table {
-    width: 100%;
-    border-collapse: collapse;
+.header-aposta {
+    background: #0066ff;
+    color: white;
+    padding: 8px;
+}
+
+.header-dezenas {
+    background: #00cc00;
+    color: white;
+    padding: 8px;
+}
+
+.header-premio {
+    background: #ff3300;
+    color: white;
+    padding: 8px;
+}
+
+.valores-grupo {
     background: white;
     border-radius: 5px;
     overflow: hidden;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.valores-table th,
-.valores-table td {
-    padding: 12px;
+.valor-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
     text-align: center;
-    border: 1px solid #e3e6f0;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
 }
 
-/* Cores diferentes para cada cabeçalho */
-.valores-table th:nth-child(1) {
-    background:rgb(8, 66, 240); /* Azul para Aposta */
+.valor-row:last-child {
+    border-bottom: none;
 }
 
-.valores-table th:nth-child(2) {
-    background:rgba(0, 160, 35, 0.94); /* Verde para Dezenas */
-}
-
-.valores-table th:nth-child(3) {
-    background:rgb(223, 71, 0); /* Amarelo para Prêmio */
-}
-
-.valores-table th {
-    color: white;
-    font-weight: 500;
-}
-
-/* Cores suaves correspondentes para as células */
-.valores-table td:nth-child(1) {
-    color: #4e73df;
-    font-weight: 700; /* Negrito para todos os valores */
-}
-
-.valores-table td:nth-child(2) {
-    color: #1cc88a;
-    font-weight: 700; /* Negrito para todos os valores */
-}
-
-.valores-table td:nth-child(3) {
-    color: #f6c23e;
-    font-weight: 700; /* Negrito para todos os valores */
-}
-
-.valores-table tr:nth-child(even) {
-    background: #f8f9fc;
+.valor-aposta, .valor-dezenas, .valor-premio {
+    padding: 8px;
 }
 </style>
 
@@ -791,18 +845,51 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Modal element:', document.getElementById('jogoModal'));
 });
 
-function editarJogo(jogo) {
-    console.log('Função editarJogo chamada', jogo);
-    
-    const modal = document.getElementById('jogoModal');
-    if (!modal) {
-        console.error('Modal não encontrado!');
-        return;
-    }
-    
+// Função para excluir valor
+async function excluirValor(button, jogo_id, valor_aposta, dezenas) {
     try {
-        // Preencher os campos
+        console.log('Excluindo valor:', { jogo_id, valor_aposta, dezenas });
+
+        const response = await fetch('ajax/excluir_valor.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                jogo_id: jogo_id,
+                valor_aposta: valor_aposta,
+                dezenas: dezenas
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // Remove a linha da tabela
+            button.closest('tr').remove();
+        } else {
+            throw new Error(data.message || 'Erro ao excluir valor');
+        }
+    } catch (error) {
+        console.error('Erro ao excluir valor:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro!',
+            text: error.message
+        });
+    }
+}
+
+// Atualizar a função editarJogo para incluir os dados necessários no botão de remoção
+function editarJogo(jogoStr) {
+    try {
+        const jogo = typeof jogoStr === 'string' ? JSON.parse(jogoStr) : jogoStr;
+        console.log('Dados do jogo:', jogo);
+
+        document.getElementById('valoresTableBody').innerHTML = '';
         document.getElementById('modalTitle').textContent = 'Editar Jogo';
+        
+        // Preenche os campos básicos
         document.getElementById('jogoId').value = jogo.id;
         document.getElementById('nome').value = jogo.nome;
         document.getElementById('minimo_numeros').value = jogo.minimo_numeros;
@@ -810,49 +897,43 @@ function editarJogo(jogo) {
         document.getElementById('acertos_premio').value = jogo.acertos_premio;
         document.getElementById('status').value = jogo.status;
         
-        // Limpar tabela de valores
-        const tbody = document.getElementById('valoresTableBody');
-        tbody.innerHTML = '';
-        
-        // Adicionar valores existentes
-        if (jogo.valores && jogo.valores.length > 0) {
-            const valoresAgrupados = {};
-            
-            // Agrupar por valor_aposta
-            jogo.valores.forEach(valor => {
-                if (!valoresAgrupados[valor.valor_aposta]) {
-                    valoresAgrupados[valor.valor_aposta] = [];
-                }
-                valoresAgrupados[valor.valor_aposta].push(valor);
-            });
-            
-            // Adicionar cada grupo de valores
-            Object.entries(valoresAgrupados).forEach(([valorAposta, premiacoes]) => {
-                adicionarValorTabela();
-                const ultimaLinha = tbody.querySelector('tr:last-child');
-                if (ultimaLinha) {
-                    const inputValorAposta = ultimaLinha.querySelector('td:first-child input');
-                    inputValorAposta.value = formatarMoeda(valorAposta);
-                    
-                    premiacoes.forEach(premiacao => {
-                        const inputPremiacao = ultimaLinha.querySelector(`input[data-numeros="${premiacao.dezenas}"]`);
-                        if (inputPremiacao) {
-                            inputPremiacao.value = formatarMoeda(premiacao.valor_premio);
-                        }
-                    });
-                }
-            });
-        } else {
-            adicionarValorTabela();
+        if (jogo.identificador_importacao) {
+            document.getElementById('identificador_importacao').value = jogo.identificador_importacao;
         }
-        
-        // Exibir o modal
-        modal.style.display = 'block';
-        console.log('Modal aberto');
-        
+
+        // Se existirem valores_info, adiciona na tabela
+        if (jogo.valores_info) {
+            const valores = jogo.valores_info.split('|').filter(v => v); // Remove valores vazios
+            valores.forEach(valor => {
+                const [valor_aposta, dezenas, valor_premio] = valor.split(':').map(v => v.trim());
+                if (valor_aposta && dezenas && valor_premio) { // Verifica se todos os valores existem
+                    const tbody = document.getElementById('valoresTableBody');
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>R$ ${formatarMoeda(parseFloat(valor_aposta))}</td>
+                        <td>${dezenas}</td>
+                        <td>R$ ${formatarMoeda(parseFloat(valor_premio))}</td>
+                        <td>
+                            <button type="button" class="btn-remove" 
+                                onclick="excluirValor(this, ${jogo.id}, '${valor_aposta}', ${dezenas})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                }
+            });
+        }
+
+        document.getElementById('jogoModal').style.display = 'block';
+
     } catch (error) {
-        console.error('Erro ao editar jogo:', error);
-        alert('Erro ao abrir o modal de edição: ' + error.message);
+        console.error('Erro ao processar dados:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro!',
+            text: 'Erro ao abrir o modal de edição: ' + error.message
+        });
     }
 }
 
@@ -898,7 +979,7 @@ function abrirModal() {
     document.getElementById('modalTitle').textContent = 'Novo Jogo';
     document.getElementById('jogoId').value = '';
     document.getElementById('valoresTableBody').innerHTML = '';
-    adicionarValorTabela();
+    adicionarValor();
     
     // Exibir modal
     document.getElementById('jogoModal').style.display = 'block';
@@ -909,12 +990,13 @@ function fecharModal() {
 }
 
 function formatarMoeda(valor) {
-    if (!valor) return '';
-    valor = valor.toString().replace(/\D/g, '');
-    valor = (parseInt(valor) / 100).toFixed(2);
-    valor = valor.replace('.', ',');
-    valor = valor.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1.');
-    return valor;
+    if (typeof valor !== 'number' || isNaN(valor)) {
+        return '0,00';
+    }
+    return valor.toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 }
 
 function gerarTabelaPrecos() {
@@ -962,51 +1044,32 @@ function atualizarCabecalhosPremiacoes(minimo, maximo) {
     });
 }
 
-function adicionarValorTabela() {
-    const valorApostaInput = document.getElementById('novo_valor_aposta');
-    const dezenasInput = document.getElementById('novo_dezenas');
-    const valorPremioInput = document.getElementById('novo_valor_premio');
-    
-    // Remove formatação para validação
-    const valorAposta = valorApostaInput.value.replace(/\D/g, '');
-    const dezenas = dezenasInput.value;
-    const valorPremio = valorPremioInput.value.replace(/\D/g, '');
-    
-    // Validações
-    if (!valorAposta || valorAposta === '0') {
-        alert('Por favor, insira um valor válido para a aposta');
-        valorApostaInput.focus();
+function adicionarValor() {
+    let valorApostaInput = document.getElementById('novo_valor_aposta').value.trim();
+    const dezenas = document.getElementById('novo_dezenas').value.trim();
+    let valorPremioInput = document.getElementById('novo_valor_premio').value.trim();
+
+    // Validação dos campos
+    if (!valorApostaInput || !dezenas || !valorPremioInput) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro!',
+            text: 'Preencha todos os campos!'
+        });
         return;
     }
-    
-    if (!dezenas || dezenas === '0') {
-        alert('Por favor, insira uma quantidade válida de dezenas');
-        dezenasInput.focus();
-        return;
-    }
-    
-    if (!valorPremio || valorPremio === '0') {
-        alert('Por favor, insira um valor válido para o prêmio');
-        valorPremioInput.focus();
-        return;
-    }
-    
-    const minimo = parseInt(document.getElementById('minimo_numeros').value);
-    const maximo = parseInt(document.getElementById('maximo_numeros').value);
-    
-    if (parseInt(dezenas) < minimo || parseInt(dezenas) > maximo) {
-        alert(`A quantidade de dezenas deve estar entre ${minimo} e ${maximo}`);
-        dezenasInput.focus();
-        return;
-    }
-    
-    // Adicionar à tabela
+
+    // Armazena os valores originais para exibição
+    const valorApostaExibicao = valorApostaInput;
+    const valorPremioExibicao = valorPremioInput;
+
+    // Adiciona à tabela mantendo os valores exatos inseridos
     const tbody = document.getElementById('valoresTableBody');
     const tr = document.createElement('tr');
     tr.innerHTML = `
-        <td>R$ ${formatarMoeda(valorAposta/100)}</td>
+        <td>${valorApostaExibicao}</td>
         <td>${dezenas}</td>
-        <td>R$ ${formatarMoeda(valorPremio/100)}</td>
+        <td>${valorPremioExibicao}</td>
         <td>
             <button type="button" class="btn-remove" onclick="this.closest('tr').remove()">
                 <i class="fas fa-trash"></i>
@@ -1014,12 +1077,11 @@ function adicionarValorTabela() {
         </td>
     `;
     tbody.appendChild(tr);
-    
-    // Limpar campos
-    valorApostaInput.value = '';
-    dezenasInput.value = '';
-    valorPremioInput.value = '';
-    valorApostaInput.focus();
+
+    // Limpa os campos
+    document.getElementById('novo_valor_aposta').value = '';
+    document.getElementById('novo_dezenas').value = '';
+    document.getElementById('novo_valor_premio').value = '';
 }
 
 // Adicionar máscara de moeda aos campos
@@ -1038,54 +1100,51 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function prepararDadosParaSalvar(event) {
     event.preventDefault();
-    
+    console.log('Preparando dados para salvar...'); // Debug
+
     try {
-        // Coletar dados básicos do jogo
-        const dadosJogo = {
-            id: document.getElementById('jogoId').value || '',
-            nome: document.getElementById('nome').value || '',
-            minimo_numeros: document.getElementById('minimo_numeros').value || '',
-            maximo_numeros: document.getElementById('maximo_numeros').value || '',
-            acertos_premio: document.getElementById('acertos_premio').value || '',
-            status: document.getElementById('status').value || '1'
-        };
-
-        // Validações básicas
-        if (!dadosJogo.nome) {
-            throw new Error('Por favor, informe o nome do jogo');
-        }
-
-        // Coletar valores da tabela
-        const valores = [];
-        const linhas = document.getElementById('valoresTableBody').getElementsByTagName('tr');
+        // Pega os valores da tabela
+        const valoresTableBody = document.getElementById('valoresTableBody');
+        const rows = valoresTableBody.getElementsByTagName('tr');
         
-        if (linhas.length === 0) {
-            throw new Error('Adicione pelo menos um valor de aposta e premiação');
+        if (rows.length === 0) {
+            throw new Error('Adicione pelo menos um valor na tabela');
         }
 
-        for (let linha of linhas) {
-            const colunas = linha.getElementsByTagName('td');
-            const valor = {
-                valor_aposta: colunas[0].textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.'),
-                dezenas: parseInt(colunas[1].textContent),
-                valor_premio: colunas[2].textContent.replace('R$ ', '').replace(/\./g, '').replace(',', '.')
-            };
-            valores.push(valor);
+        // Array para armazenar todos os valores
+        const valores = [];
+        
+        // Processa cada linha da tabela
+        for (let row of rows) {
+            const cells = row.getElementsByTagName('td');
+            
+            valores.push({
+                valor_aposta: cells[0].textContent,
+                dezenas: cells[1].textContent,
+                valor_premio: cells[2].textContent
+            });
         }
 
-        // Criar objeto de dados para envio
-        const dadosParaEnvio = {
-            ...dadosJogo,
-            valores: JSON.stringify(valores)
+        const dadosJogo = {
+            id: document.getElementById('jogoId').value || null,
+            nome: document.getElementById('nome').value,
+            identificador_importacao: document.getElementById('identificador_importacao')?.value || '',
+            minimo_numeros: parseInt(document.getElementById('minimo_numeros').value),
+            maximo_numeros: parseInt(document.getElementById('maximo_numeros').value),
+            acertos_premio: parseInt(document.getElementById('acertos_premio').value),
+            status: parseInt(document.getElementById('status').value),
+            valores: valores // Envia todos os valores da tabela
         };
 
-        // Enviar dados via fetch
+        console.log('Dados preparados para envio:', dadosJogo);
+
+        // Enviar dados
         fetch('ajax/salvar_jogo.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(dadosParaEnvio)
+            body: JSON.stringify(dadosJogo)
         })
         .then(response => response.json())
         .then(data => {
@@ -1093,7 +1152,7 @@ function prepararDadosParaSalvar(event) {
                 Swal.fire({
                     icon: 'success',
                     title: 'Sucesso!',
-                    text: 'Jogo salvo com sucesso!'
+                    text: data.message
                 }).then(() => {
                     window.location.reload();
                 });
@@ -1102,11 +1161,11 @@ function prepararDadosParaSalvar(event) {
             }
         })
         .catch(error => {
-            console.error('Erro:', error);
+            console.error('Erro completo:', error);
             Swal.fire({
                 icon: 'error',
                 title: 'Erro!',
-                text: error.message || 'Erro ao salvar o jogo'
+                text: error.message
             });
         });
 
@@ -1115,7 +1174,7 @@ function prepararDadosParaSalvar(event) {
         Swal.fire({
             icon: 'error',
             title: 'Erro!',
-            text: error.message
+            text: 'Erro ao preparar os dados: ' + error.message
         });
     }
 }

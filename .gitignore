@@ -1,0 +1,45 @@
+# Arquivos de configuração local
+/config/config.local.php
+
+# Arquivos de log
+*.log
+deploy_log.txt
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Diretórios de dependências
+/vendor/
+/node_modules/
+
+# Arquivos de ambiente
+.env
+.env.local
+
+# Arquivos de backup
+*.bak
+*.backup
+*.zip
+*.tar
+*.gz
+
+# Arquivos de upload
+/uploads/
+/comprovantes/
+
+# Arquivos de cache
+/cache/
+*.cache
+
+# Arquivos específicos do IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace 

@@ -1,6 +1,84 @@
 <?php
 require_once '../config/database.php';
-session_start();
+require_once '../vendor/autoload.php';
+
+if (!isset($_GET['usuario_id']) || !isset($_GET['jogo'])) {
+    die("Parâmetros inválidos");
+}
+
+$usuario_id = $_GET['usuario_id'];
+$jogo_nome = urldecode($_GET['jogo']);
+
+// Debug inicial
+error_log("Parâmetros recebidos:");
+error_log("usuario_id: " . $usuario_id);
+error_log("jogo: " . $jogo_nome);
+
+// Primeiro, vamos verificar quais jogos o usuário tem
+$jogos_query = "SELECT DISTINCT jogo_nome FROM apostas_importadas WHERE usuario_id = :usuario_id";
+$stmt_jogos = $pdo->prepare($jogos_query);
+$stmt_jogos->execute([':usuario_id' => $usuario_id]);
+$jogos_disponiveis = $stmt_jogos->fetchAll(PDO::FETCH_COLUMN);
+
+error_log("Jogos disponíveis para este usuário:");
+error_log(print_r($jogos_disponiveis, true));
+
+// Nova consulta SQL corrigida
+$sql = "
+    SELECT 
+        ai.*, 
+        u.nome as apostador_nome, 
+        u.whatsapp, 
+        r.nome as revendedor_nome 
+    FROM apostas_importadas ai 
+    LEFT JOIN usuarios u ON ai.usuario_id = u.id 
+    LEFT JOIN usuarios r ON ai.revendedor_id = r.id 
+    WHERE ai.usuario_id = :usuario_id 
+    AND (
+        ai.jogo_nome = :jogo_nome 
+        OR 
+        ai.jogo_nome = :jogo_nome_mobile
+    )
+    ORDER BY ai.created_at DESC
+";
+
+try {
+    $stmt = $pdo->prepare($sql);
+    
+    // Prepara os nomes dos jogos para a busca
+    $jogo_nome_mobile = 'Loterias Mobile: ';
+    if ($jogo_nome == 'Mega Sena') {
+        $jogo_nome_mobile .= 'MS';
+    } else if ($jogo_nome == 'LotoFácil') {
+        $jogo_nome_mobile .= 'LF';
+    }
+    
+    $params = [
+        ':usuario_id' => $usuario_id,
+        ':jogo_nome' => $jogo_nome,
+        ':jogo_nome_mobile' => $jogo_nome_mobile
+    ];
+    
+    $stmt->execute($params);
+    
+    // Debug
+    error_log("SQL Query executada: " . $sql);
+    error_log("Parâmetros da query:");
+    error_log(print_r($params, true));
+    
+    $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    error_log("Resultado da consulta:");
+    error_log(print_r($apostas, true));
+    
+} catch (PDOException $e) {
+    error_log("Erro na consulta: " . $e->getMessage());
+    die("Erro ao buscar apostas");
+}
+
+if (empty($apostas)) {
+    die("Nenhuma aposta encontrada - Verifique os parâmetros da URL e a consulta SQL");
+}
 
 // Verificar se é admin
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {

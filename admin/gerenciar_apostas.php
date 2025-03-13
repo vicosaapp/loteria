@@ -147,20 +147,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Buscar todas as apostas agrupadas por apostador
-$stmt = $pdo->query("
+$sql = "
     WITH todas_apostas AS (
         (SELECT 
             a.id,
             'normal' as tipo_aposta,
             a.numeros,
-            a.valor_aposta as valor,
+            a.valor_aposta/100 as valor,
             a.created_at as data_aposta,
             a.usuario_id,
             u.nome as apostador_nome,
             u.whatsapp as apostador_whatsapp,
             u.telefone as apostador_telefone,
             r.nome as revendedor_nome,
-            'Normal' as jogo_nome
+            'Normal' as jogo_nome,
+            'Normal' as jogo_nome_original,
+            0 as valor_premio
         FROM apostas a
         LEFT JOIN usuarios u ON a.usuario_id = u.id
         LEFT JOIN usuarios r ON a.revendedor_id = r.id)
@@ -171,17 +173,31 @@ $stmt = $pdo->query("
             ai.id,
             'importada' as tipo_aposta,
             ai.numeros,
-            ai.valor_aposta as valor,
+            ai.valor_aposta/100 as valor,
             ai.created_at as data_aposta,
             ai.usuario_id,
             u.nome as apostador_nome,
             COALESCE(ai.whatsapp, u.whatsapp) as apostador_whatsapp,
             u.telefone as apostador_telefone,
             r.nome as revendedor_nome,
-            ai.jogo_nome as jogo_nome
+            j.nome as jogo_nome,
+            ai.jogo_nome as jogo_nome_original,
+            vj.valor_premio
         FROM apostas_importadas ai
         LEFT JOIN usuarios u ON ai.usuario_id = u.id
-        LEFT JOIN usuarios r ON ai.revendedor_id = r.id)
+        LEFT JOIN usuarios r ON ai.revendedor_id = r.id
+        LEFT JOIN jogos j ON (
+            CASE 
+                WHEN ai.jogo_nome LIKE '%MS' THEN 'Mega Sena'
+                WHEN ai.jogo_nome LIKE '%LF' THEN 'LotoFácil'
+                ELSE ai.jogo_nome 
+            END = j.nome
+        )
+        LEFT JOIN valores_jogos vj ON (
+            j.id = vj.jogo_id 
+            AND vj.dezenas = (LENGTH(ai.numeros) - LENGTH(REPLACE(ai.numeros, ' ', '')) + 1)
+            AND vj.valor_aposta = ai.valor_aposta
+        ))
     )
     SELECT 
         usuario_id,
@@ -190,15 +206,26 @@ $stmt = $pdo->query("
         apostador_telefone,
         revendedor_nome,
         jogo_nome,
+        jogo_nome_original,
         COUNT(*) as total_apostas,
         GROUP_CONCAT(numeros SEPARATOR '|') as todas_apostas,
-        SUM(valor) as valor_total,
+        MIN(valor) * COUNT(*) as valor_total,
+        SUM(valor_premio) as valor_premio_total,
         MAX(data_aposta) as ultima_aposta
     FROM todas_apostas
-    GROUP BY usuario_id, apostador_nome, apostador_whatsapp, apostador_telefone, revendedor_nome, jogo_nome
+    GROUP BY 
+        usuario_id, 
+        apostador_nome, 
+        apostador_whatsapp, 
+        apostador_telefone, 
+        revendedor_nome, 
+        jogo_nome,
+        jogo_nome_original
     ORDER BY ultima_aposta DESC
-");
+";
 
+$stmt = $pdo->prepare($sql);
+$stmt->execute();
 $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // Inicia o buffer de saída
@@ -221,13 +248,15 @@ ob_start();
     </div>
 <?php endif; ?>
 
-<!-- Modal para exibir números -->
+<!-- Modal -->
 <div class="modal fade" id="numerosModal" tabindex="-1" role="dialog" aria-labelledby="numerosModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="numerosModalLabel">Apostas</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar" onclick="$('#numerosModal').modal('hide')">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="numerosModalLabel">
+                    <i class="fas fa-ticket-alt"></i> BILHETE DE APOSTAS
+                </h5>
+                <button type="button" class="close text-white" onclick="fecharModal()">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
@@ -235,8 +264,8 @@ ob_start();
                 <div id="apostasContainer"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="$('#numerosModal').modal('hide')">
-                    Fechar
+                <button type="button" class="btn btn-secondary" onclick="fecharModal()">
+                    <i class="fas fa-times"></i> Fechar
                 </button>
             </div>
         </div>
@@ -268,6 +297,7 @@ ob_start();
                             <th>Revendedor</th>
                             <th>Total Apostas</th>
                             <th>Valor Total</th>
+                            <th>Premiação</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -276,47 +306,38 @@ ob_start();
                             <tr>
                                 <td><?php echo date('d/m/Y H:i', strtotime($aposta['ultima_aposta'])); ?></td>
                                 <td><?php echo $aposta['usuario_id']; ?></td>
-                                <td><?php echo htmlspecialchars($aposta['apostador_nome']); ?></td>
-                                <td><?php echo htmlspecialchars($aposta['jogo_nome']); ?></td>
+                                <td><?php echo htmlspecialchars($aposta['apostador_nome'] ?? ''); ?></td>
+                                <td><?php echo htmlspecialchars($aposta['jogo_nome'] ?? 'Normal'); ?></td>
                                 <td>
-                                    <?php if ($aposta['apostador_whatsapp'] || $aposta['apostador_telefone']): ?>
-                                        <?php 
-                                        $telefone = preg_replace('/[^0-9]/', '', 
-                                            $aposta['apostador_whatsapp'] ?: $aposta['apostador_telefone']
-                                        );
-                                        $mensagem = "Olá, " . $aposta['apostador_nome'];
-                                        ?>
-                                        <a href="https://wa.me/55<?php echo $telefone; ?>?text=<?php echo urlencode($mensagem); ?>" 
-                                           target="_blank" 
-                                           class="btn btn-success btn-sm whatsapp-btn">
-                                            <i class="fab fa-whatsapp"></i> 
-                                            <?php echo $aposta['apostador_whatsapp'] ?: $aposta['apostador_telefone']; ?>
+                                    <?php if (!empty($aposta['apostador_whatsapp'])): ?>
+                                        <?php echo htmlspecialchars($aposta['apostador_whatsapp']); ?>
+                                        <a href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $aposta['apostador_whatsapp']); ?>" 
+                                           class="whatsapp-link" 
+                                           target="_blank">
+                                            <i class="fab fa-whatsapp"></i>
                                         </a>
                                     <?php else: ?>
-                                        <span class="text-muted">Não informado</span>
+                                        <?php echo htmlspecialchars($aposta['apostador_telefone'] ?? 'N/A'); ?>
                                     <?php endif; ?>
                                 </td>
-                                <td><?php echo htmlspecialchars($aposta['revendedor_nome'] ?: 'Admin'); ?></td>
+                                <td><?php echo htmlspecialchars($aposta['revendedor_nome'] ?? 'N/A'); ?></td>
                                 <td><?php echo $aposta['total_apostas']; ?></td>
-                                <td>R$ <?php echo number_format($aposta['valor_total'], 2, ',', '.'); ?></td>
+                                <td>R$ <?php echo number_format($aposta['valor_total'] ?? 0, 2, ',', '.'); ?></td>
+                                <td>R$ <?php echo number_format($aposta['valor_premio_total'] ?? 0, 2, ',', '.'); ?></td>
                                 <td>
                                     <div class="btn-group">
-                                        <button class="btn btn-info btn-sm" 
-                                                onclick="verApostas('<?php echo htmlspecialchars($aposta['todas_apostas'] ?? ''); ?>', '<?php echo htmlspecialchars($aposta['apostador_nome'] ?? ''); ?>')">
+                                        <button type="button" 
+                                                class="btn btn-info btn-sm" 
+                                                onclick="verApostas('<?php echo htmlspecialchars($aposta['todas_apostas']); ?>', '<?php echo htmlspecialchars($aposta['apostador_nome']); ?>', '<?php echo htmlspecialchars($aposta['jogo_nome']); ?>')">
                                             <i class="fas fa-eye"></i> Ver apostas
                                         </button>
                                         <button class="btn btn-success btn-sm" 
                                                 onclick="gerarComprovante(<?php echo $aposta['usuario_id']; ?>, '<?php echo htmlspecialchars($aposta['jogo_nome'] ?? ''); ?>')">
                                             <i class="fas fa-file-pdf"></i> Comprovante
                                         </button>
-                                        <button class="btn btn-danger btn-sm" 
-                                                onclick="excluirApostas(
-                                                    <?php echo (int)$aposta['usuario_id']; ?>, 
-                                                    '<?php echo htmlspecialchars($aposta['jogo_nome'] ?? ''); ?>', 
-                                                    '<?php echo htmlspecialchars($aposta['apostador_nome'] ?? ''); ?>'
-                                                )">
-                                            <i class="fas fa-trash"></i> Excluir
-                                        </button>
+                                        <a href="#" onclick="return excluirApostas('<?php echo $aposta['usuario_id']; ?>', '<?php echo htmlspecialchars($aposta['jogo_nome_original']); ?>', '<?php echo htmlspecialchars($aposta['apostador_nome']); ?>')" class="btn btn-danger btn-sm">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>
@@ -624,20 +645,265 @@ ob_start();
 }
 
 .modal-footer {
-    border-top: 1px solid #dee2e6;
+    border-top: none;
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+}
+
+.modal-footer .btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    padding: 8px 20px;
+    border-radius: 5px;
+    border: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.modal-footer .btn-secondary:hover {
+    background-color: #5a6268;
+    transform: translateY(-1px);
+}
+
+.modal-header .close {
+    color: white;
+    opacity: 1;
+    text-shadow: none;
+    background: transparent;
+    border: none;
+    padding: 1rem;
+    margin: -1rem -1rem -1rem auto;
+}
+
+.modal-header .close:hover {
+    opacity: 0.8;
+}
+
+.numeros-grid {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 10px;
+    overflow-x: auto;
+    width: 100%;
+    background: #f8f9fa;
+    border-radius: 5px;
+    padding: 15px;
+}
+
+.numero-bola {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    background: #1a237e;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-right: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.aposta-section {
+    background: white;
+    border-radius: 10px;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 15px;
+}
+
+.modal-dialog {
+    max-width: 800px;
+    width: 95%;
+    margin: 1.75rem auto;
+}
+
+@media (max-width: 768px) {
+    .numeros-grid {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .numero-bola {
+        width: 35px;
+        height: 35px;
+        min-width: 35px;
+        font-size: 1rem;
+    }
+}
+
+/* Estilos do Modal */
+.ticket-style {
+    background: #fff;
+    border-radius: 15px;
+    border: 2px solid #1a237e;
+}
+
+.modal-header {
+    border-bottom: none;
     padding: 1rem;
 }
 
-.btn-secondary {
-    color: #fff;
-    background-color: #6c757d;
-    border-color: #6c757d;
+.ticket-header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
 }
 
-.btn-secondary:hover {
-    color: #fff;
-    background-color: #5a6268;
-    border-color: #545b62;
+.logo-area {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-area i {
+    font-size: 2rem;
+    color: #1a237e;
+}
+
+.logo-area h5 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #1a237e;
+    margin: 0;
+}
+
+/* Conteúdo do Ticket */
+.ticket-content {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+.ticket-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.info-row {
+    display: flex;
+    margin-bottom: 10px;
+    padding: 5px 0;
+    border-bottom: 1px dashed #ccc;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-weight: bold;
+    color: #1a237e;
+    width: 120px;
+}
+
+.info-value {
+    flex: 1;
+    color: #333;
+}
+
+.ticket-separator {
+    text-align: center;
+    margin: 20px 0;
+    position: relative;
+}
+
+.ticket-separator:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    border-top: 2px dashed #1a237e;
+    z-index: 1;
+}
+
+.separator-text {
+    background: white;
+    padding: 0 15px;
+    color: #1a237e;
+    font-weight: bold;
+    position: relative;
+    z-index: 2;
+    display: inline-block;
+}
+
+.ticket-footer {
+    text-align: center;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px dashed #1a237e;
+}
+
+.footer-text {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #1a237e;
+    margin-bottom: 10px;
+}
+
+.ticket-id {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+/* Ajustes para telas menores */
+@media (max-width: 768px) {
+    .numero-bola {
+        width: 35px;
+        height: 35px;
+        min-width: 35px;
+        font-size: 1rem;
+    }
+    
+    .info-row {
+        flex-direction: column;
+    }
+    
+    .info-label {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+}
+
+.numeros-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 5px;
+}
+
+.numero-bola {
+    width: 40px;
+    height: 40px;
+    background: #1a237e;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.aposta-section {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    padding: 15px;
+    width: 100%;
 }
 </style>
 
@@ -763,70 +1029,39 @@ function rejeitarAposta(id) {
     });
 }
 
-// Função para excluir aposta
 function excluirApostas(usuarioId, jogoNome, apostadorNome) {
-    if (!usuarioId || !jogoNome || !apostadorNome) {
-        Swal.fire({
-            icon: 'error',
-            title: 'Erro',
-            text: 'Dados inválidos para exclusão'
-        });
-        return;
+    if (!usuarioId || !jogoNome) {
+        alert('Dados inválidos para exclusão');
+        return false;
     }
 
-    Swal.fire({
-        title: 'Confirmar exclusão?',
-        html: `Deseja excluir todas as apostas de:<br>
-              <strong>${apostadorNome}</strong><br>
-              Jogo: <strong>${jogoNome}</strong>`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Sim, excluir!',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            console.log('Enviando requisição de exclusão:', { usuarioId, jogoNome }); // Debug
-
-            fetch('ajax/excluir_apostas_grupo.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    usuario_id: usuarioId,
-                    jogo_nome: jogoNome
-                })
+    if (confirm(`Deseja excluir todas as apostas de ${apostadorNome} para o jogo ${jogoNome}?`)) {
+        fetch('ajax/excluir_apostas_grupo.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                usuario_id: usuarioId,
+                jogo_nome: jogoNome
             })
-            .then(response => {
-                console.log('Resposta recebida:', response); // Debug
-                return response.json();
-            })
-            .then(data => {
-                console.log('Dados processados:', data); // Debug
-                if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Sucesso!',
-                        text: data.message || 'Apostas excluídas com sucesso!'
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    throw new Error(data.error || 'Erro ao excluir apostas');
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error); // Debug
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro!',
-                    text: error.message || 'Erro ao processar a exclusão'
-                });
-            });
-        }
-    });
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Apostas excluídas com sucesso!');
+                window.location.reload();
+            } else {
+                throw new Error(data.error || 'Erro ao excluir apostas');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao excluir apostas: ' + error.message);
+        });
+    }
+    
+    return false;
 }
 
 $(document).ready(function() {
@@ -838,32 +1073,91 @@ $(document).ready(function() {
     });
 });
 
-function verApostas(apostasStr, apostador) {
-    const apostas = apostasStr.split('|');
-    let html = `<h4>${apostador}</h4><div class="apostas-list">`;
+function verApostas(apostasStr, apostador, jogoNome) {
+    // Debug
+    console.log('Números recebidos:', apostasStr);
     
-    apostas.forEach((aposta, index) => {
-        html += `
-            <div class="aposta-item">
-                <strong>Aposta ${index + 1}:</strong>
-                <div class="numeros">${aposta}</div>
-            </div>
-        `;
+    // Processa as apostas (podem ser múltiplas, separadas por |)
+    const apostas = apostasStr.split('|').map(aposta => {
+        // Limpa e processa os números de cada aposta
+        return aposta
+            .trim()
+            .split(' ')
+            .map(num => parseInt(num.trim()))
+            .filter(num => !isNaN(num))
+            .sort((a, b) => a - b);
     });
     
-    html += '</div>';
+    console.log('Apostas processadas:', apostas);
+    
+    let html = `
+        <div class="ticket-content">
+            <div class="ticket-info">
+                <div class="info-row">
+                    <span class="info-label">APOSTADOR:</span>
+                    <span class="info-value">${apostador}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">JOGO:</span>
+                    <span class="info-value">${jogoNome}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">DATA:</span>
+                    <span class="info-value">${new Date().toLocaleDateString('pt-BR')}</span>
+                </div>
+            </div>
+
+            <div class="ticket-separator">
+                <div class="separator-text">APOSTAS REALIZADAS</div>
+            </div>
+
+            <div class="apostas-wrapper">
+                ${apostas.map((numeros, index) => `
+                    <div class="aposta-section">
+                        <div class="aposta-header">
+                            <div class="aposta-title">APOSTA ${index + 1}</div>
+                            <div class="aposta-details">${numeros.length} NÚMEROS</div>
+                        </div>
+                        <div class="numeros-container">
+                            ${numeros.map(numero => `
+                                <div class="numero-bola">${String(numero).padStart(2, '0')}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div class="ticket-footer">
+                <div class="footer-text">BOA SORTE!</div>
+                <div class="ticket-id">ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}</div>
+            </div>
+        </div>
+    `;
     
     document.getElementById('apostasContainer').innerHTML = html;
-    $('#numerosModal').modal({
-        backdrop: 'static',
-        keyboard: true
-    });
+    $('#numerosModal').modal('show');
+}
+
+// Função para fechar o modal
+function fecharModal() {
+    $('#numerosModal').modal('hide');
+    // Alternativa caso o jQuery não funcione
+    const modal = document.getElementById('numerosModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        document.body.classList.remove('modal-open');
+        const modalBackdrops = document.getElementsByClassName('modal-backdrop');
+        while(modalBackdrops.length > 0){
+            modalBackdrops[0].parentNode.removeChild(modalBackdrops[0]);
+        }
+    }
 }
 
 // Adicionar evento para fechar modal com ESC
-$(document).keyup(function(e) {
-    if (e.key === "Escape") {
-        $('#numerosModal').modal('hide');
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        fecharModal();
     }
 });
 

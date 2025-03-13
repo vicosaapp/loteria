@@ -1,6 +1,8 @@
 <?php
 // Forçar exibição de erros
-
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 require_once 'includes/header.php';
 require_once '../config/database.php';
@@ -65,91 +67,62 @@ try {
 $debug_messages = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    echo "<pre>";
-    print_r($_POST); // Debug dos dados recebidos
-    
     try {
-        // Preparar os valores
-        $usuario_id = $_POST['apostador'];
-        $revendedor_id = !empty($_POST['revendedor']) ? $_POST['revendedor'] : null;
-        $valor_aposta = str_replace(',', '.', $_POST['valor_aposta']);
-        $valor_premio = str_replace(',', '.', $_POST['valor_premio']);
-        $whatsapp = $_POST['whatsapp'];
-        $apostas = $_POST['apostas'];
-        
-        // Debug dos valores formatados
-        echo "\nValores processados:\n";
-        echo "usuario_id: $usuario_id\n";
-        echo "revendedor_id: " . var_export($revendedor_id, true) . "\n";
-        echo "valor_aposta: $valor_aposta\n";
-        echo "valor_premio: $valor_premio\n";
-        
-        // Processar apostas
-        $linhas = explode("\n", trim($apostas));
-        $jogo_nome = trim($linhas[0]);
-        array_shift($linhas);
-        
-        foreach ($linhas as $linha) {
-            if (empty(trim($linha))) continue;
-            
-            $sql = "INSERT INTO apostas_importadas 
-                    (usuario_id, jogo_nome, numeros, valor_aposta, valor_premio, revendedor_id, whatsapp) 
-                    VALUES 
-                    (?, ?, ?, ?, ?, ?, ?)";
-            
-            echo "\nExecutando SQL:\n$sql\n";
-            
-            $stmt = $pdo->prepare($sql);
-            $result = $stmt->execute([
-                $usuario_id,
-                $jogo_nome,
-                trim($linha),
-                $valor_aposta,
-                $valor_premio,
-                $revendedor_id,
-                $whatsapp
-            ]);
-            
-            if ($result) {
-                $last_id = $pdo->lastInsertId();
-                echo "\nAposta inserida com ID: $last_id\n";
-                
-                // Verificar o registro inserido
-                $check = $pdo->query("SELECT * FROM apostas_importadas WHERE id = $last_id")->fetch(PDO::FETCH_ASSOC);
-                echo "Registro inserido:\n";
-                print_r($check);
-            }
+        // Validar campos obrigatórios
+        if (empty($_POST['apostador'])) {
+            throw new Exception("Selecione um apostador");
         }
         
-        echo "</pre>";
-        //header('Location: gerenciar_apostas.php');
-        //exit;
+        if (empty($_POST['valor_aposta']) || empty($_POST['apostas'])) {
+            throw new Exception("Valor da aposta e apostas são obrigatórios");
+        }
+
+        // Processar valores
+        $usuario_id = intval($_POST['apostador']);
+        $revendedor_id = !empty($_POST['revendedor']) ? intval($_POST['revendedor']) : null;
+        $whatsapp = !empty($_POST['whatsapp']) ? $_POST['whatsapp'] : null;
+        
+        // Tratar valor da aposta
+        $valor_aposta = str_replace(['R$', ' '], '', $_POST['valor_aposta']);
+        $valor_aposta = str_replace(',', '.', $valor_aposta);
+        $valor_aposta = number_format(floatval($valor_aposta), 2, '.', '');
+        
+        // Tratar valor do prêmio
+        $valor_premio = str_replace(['R$', ' '], '', $_POST['valor_premiacao']);
+        $valor_premio = str_replace(',', '.', $valor_premio);
+        $valor_premio = number_format(floatval($valor_premio), 2, '.', '');
+        
+        // Preparar SQL
+        $sql = "INSERT INTO apostas_importadas 
+                (usuario_id, jogo_nome, numeros, valor_aposta, valor_premio, revendedor_id, whatsapp) 
+                VALUES 
+                (?, ?, ?, ?, ?, ?, ?)";
+                
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $usuario_id,
+            trim(explode("\n", $_POST['apostas'])[0]), // Nome do jogo
+            $_POST['apostas'],
+            $valor_aposta,
+            $valor_premio,
+            $revendedor_id,
+            $whatsapp
+        ]);
+        
+        header('Location: importar_apostas.php?success=1');
+        exit;
         
     } catch (Exception $e) {
-        echo "\nERRO: " . $e->getMessage() . "\n";
+        $erro = $e->getMessage();
     }
 }
 ?>
 
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Importar Apostas</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <!-- Área de Debug -->
-        <?php if (!empty($debug_messages)): ?>
-            <div class="alert alert-info">
-                <h4>Debug Information:</h4>
-                <pre><?php echo implode("\n", $debug_messages); ?></pre>
-            </div>
-        <?php endif; ?>
-
+  
         <h2>Importar Apostas</h2>
+        
+        <div class="debug-info" style="background:#f4f6f9; padding: 0px; margin: 0px 0; border-radius: 0px; max-height: 0px; overflow-y: auto;">
+        </div>
         
         <?php if (isset($error)): ?>
             <div class="alert alert-danger"><?php echo $error; ?></div>
@@ -193,58 +166,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </select>
                 </div>
 
+                <div class="col-md-6 mb-3">
+                    <label>Valor da premiação</label>
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">R$</span>
+                        </div>
+                        <input type="text" id="valor_premiacao" name="valor_premiacao" class="form-control" value="0,00" readonly>
+                    </div>
+                </div>
             </div>
 
             <div class="row">
                 <div class="col-md-6 mb-3">
-                    <label for="valor_aposta">Valor por Aposta</label>
+                    <label>Valor por Aposta</label>
                     <div class="input-group">
                         <div class="input-group-prepend">
                             <span class="input-group-text">R$</span>
                         </div>
-                        <input type="text" 
-                               class="form-control" 
-                               id="valor_aposta" 
-                               name="valor_aposta" 
-                               required 
-                               onkeyup="formatarMoeda(this)"
-                               value="0,00"
-                               pattern="^\d*\.?\d{0,2}$"
-                               title="Digite um valor válido com até duas casas decimais">
-                    </div>
-                </div>
-
-                <div class="col-md-6 mb-3">
-                    <label for="valor_premio">Valor da Premiação</label>
-                    <div class="input-group">
-                        <div class="input-group-prepend">
-                            <span class="input-group-text">R$</span>
-                        </div>
-                        <input type="text" 
-                               class="form-control" 
-                               id="valor_premio" 
-                               name="valor_premio" 
-                               required 
-                               onkeyup="formatarMoeda(this)"
-                               value="0,00"
-                               pattern="^\d*\.?\d{0,2}$"
-                               title="Digite um valor válido com até duas casas decimais">
+                        <input type="number" id="valor_aposta" name="valor_aposta" class="form-control" value="1.00" step="1.00">
                     </div>
                 </div>
             </div>
 
             <div class="form-group">
-                <label for="apostas">Cole as apostas aqui</label>
-                <textarea class="form-control" id="apostas" name="apostas" rows="10" required></textarea>
+                <label>Cole as apostas aqui</label>
+                <textarea id="apostas" name="apostas" class="form-control" rows="10"></textarea>
             </div>
 
             <div class="mt-3">
                 <button type="button" class="btn btn-secondary" onclick="visualizarApostas()">
                     <i class="fas fa-eye"></i> Visualizar
                 </button>
-                <button type="button" id="btnSalvar" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Salvar Apostas
-                </button>
+                <button type="button" id="btnSalvarDados" class="btn btn-primary">Salvar Dados</button>
             </div>
         </form>
     </div>
@@ -265,6 +219,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
     </div>
+
+    <!-- Adicione um elemento para mostrar o valor da premiação -->
+    <div id="premio-info" style="margin: 10px 0;"></div>
 
     <style>
     .card {
@@ -337,7 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 
     <script>
-    // Função para atualizar WhatsApp
+    // Funçãoremo para atualizar WhatsApp
     function atualizarWhatsApp() {
         const apostadorSelect = document.getElementById('apostador');
         const whatsappInput = document.getElementById('whatsapp');
@@ -350,95 +307,114 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Função para formatar moeda
-    function formatarMoeda(input) {
-        let valor = input.value.replace(/\D/g, '');
-        valor = (parseInt(valor) / 100).toFixed(2);
-        valor = valor.replace(".", ",");
-        valor = valor.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
-        input.value = valor;
+    // Função para formatar valor
+    function formatarValor(valor) {
+        return valor.replace(/[^\d,]/g, '').replace(',', '.');
     }
 
-    // Função para converter valor para o formato correto antes de enviar
-    function getValorFormatado(valor) {
-        // Remove todos os caracteres exceto números e vírgula
-        valor = valor.replace(/[^\d,]/g, '');
-        // Substitui vírgula por ponto para cálculos
-        valor = valor.replace(',', '.');
-        // Converte para float
-        return parseFloat(valor);
+    // Função para mostrar debug
+  //
+  //   function showDebug(title, data) {
+  //       const debugArea = document.getElementById('debugArea');
+  //       const debugText = `=== ${title} ===\n${JSON.stringify(data, null, 2)}\n\n`;
+  //       debugArea.textContent += debugText;
+  //   }
+
+    // Função para formatar valor em moeda brasileira
+    function formatarMoeda(valor) {
+        return valor.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
     }
 
-    // Adicionando evento de click diretamente
-    document.getElementById('btnSalvar').addEventListener('click', function() {
-        // Debug
-        console.log('Botão clicado');
+    // Função para calcular premiação
+    async function calcularPremiacao() {
+        const textarea = document.querySelector('textarea');
+        const valorApostaInput = document.querySelector('input[id^="valor_aposta"]');
+        const premiacaoInput = document.querySelector('input[name="valor_premiacao"]');
+        const debugDiv = document.querySelector('.debug-info');
+        const texto = textarea.value.trim();
         
-        // Pegar valores
-        const apostador = document.getElementById('apostador').value;
-        const valorAposta = getValorFormatado(document.getElementById('valor_aposta').value);
-        const valorPremio = getValorFormatado(document.getElementById('valor_premio').value);
-        const apostasTexto = document.getElementById('apostas').value.trim();
+        debugDiv.innerHTML = ''; // Limpar debug anterior
         
-        // Debug
-        console.log('Apostador:', apostador);
-        console.log('Valor:', valorAposta);
-        console.log('Valor Premio:', valorPremio);
-        console.log('Apostas:', apostasTexto);
+        try {
+            if (!texto || !valorApostaInput.value) {
+                premiacaoInput.value = '0,00';
+                return;
+            }
+
+            const response = await fetch('ajax/buscar_jogo.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    nome: texto,
+                    valor_aposta: valorApostaInput.value
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.success) {
+                // Formatar o valor do prêmio para exibição
+                const valorPremio = parseFloat(data.jogo.valor_premio);
+                
+                // Dividir por 100 para corrigir os dígitos extras
+                const valorPremioCorrigido = valorPremio / 100;
+                
+                premiacaoInput.value = valorPremioCorrigido.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+
+                // Atualizar informações de debug
+                const valorBaseAposta = parseFloat(data.jogo.debug.valor_base_aposta);
+                const valorBasePremio = parseFloat(data.jogo.debug.valor_base_premio) / 100;
+                
+                debugDiv.innerHTML = `
+                    <p>Valor base da aposta: R$ ${valorBaseAposta.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                    <p>Valor base do prêmio: R$ ${valorBasePremio.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                    <p>Multiplicador: ${data.jogo.debug.multiplicador}</p>
+                `;
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            premiacaoInput.value = '0,00';
+            debugDiv.innerHTML = `<p class="error">Erro: ${error.message}</p>`;
+        }
+    }
+
+    // Adicionar os event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+        const textarea = document.querySelector('textarea');
+        const valorApostaInput = document.querySelector('input[id^="valor_aposta"]');
         
-        // Validação básica
-        if (!apostador || !valorAposta || !valorPremio || !apostasTexto) {
-            alert('Preencha todos os campos obrigatórios');
-            return;
+        if (textarea) {
+            textarea.addEventListener('input', debounce(calcularPremiacao, 500));
+            textarea.addEventListener('paste', () => setTimeout(calcularPremiacao, 100));
         }
         
-        // Processar apostas
-        const linhas = apostasTexto.split('\n').filter(linha => linha.trim());
-        const nomeJogo = linhas[0].trim();
-        const apostas = linhas.slice(1)
-            .filter(linha => linha.trim())
-            .map(linha => linha.trim().split(/\s+/).map(Number));
-        
-        // Preparar dados
-        const dados = {
-            jogo: nomeJogo,
-            apostas: apostas,
-            apostador_id: apostador,
-            whatsapp: document.getElementById('whatsapp').value,
-            revendedor_id: document.getElementById('revendedor').value || null,
-            valor_aposta: valorAposta,
-            valor_premio: valorPremio
-        };
-        
-        // Debug
-        console.log('Dados para envio:', dados);
-        
-        // Enviar dados
-        fetch('ajax/salvar_apostas_importadas.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(dados)
-        })
-        .then(response => {
-            console.log('Resposta recebida:', response);
-            return response.json();
-        })
-        .then(data => {
-            console.log('Dados processados:', data);
-            if (data.success) {
-                alert('Apostas salvas com sucesso!');
-                window.location.href = 'gerenciar_apostas.php';
-            } else {
-                alert(data.error || 'Erro ao salvar apostas');
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao processar a requisição');
-        });
+        if (valorApostaInput) {
+            valorApostaInput.addEventListener('input', debounce(calcularPremiacao, 500));
+        }
     });
+
+    // Função debounce para evitar múltiplas chamadas
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
 
     function visualizarApostas() {
         const texto = document.getElementById('apostas').value.trim();
@@ -475,54 +451,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $('#visualizarModal').modal('show');
     }
 
+    // Evento do botão salvar
     document.addEventListener('DOMContentLoaded', function() {
-        const btnSalvar = document.querySelector('button.btn.btn-primary');
+        const textArea = document.querySelector('textarea');
+        const valorInput = document.querySelector('input[type="number"]');
+        const premiacaoInput = document.querySelector('input[name="valor_premiacao"]');
         
+        // Função para atualizar premiação
+        async function atualizarPremiacao() {
+            try {
+                if (!textArea.value.trim() || !valorInput.value) {
+                    premiacaoInput.value = '0,00';
+                    return;
+                }
+
+                const resultado = await calcularPremiacao(
+                    textArea.value.trim(),
+                    parseFloat(valorInput.value)
+                );
+
+                if (premiacaoInput && resultado.valor_premio) {
+                    premiacaoInput.value = formatarMoeda(resultado.valor_premio);
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar premiação:', error);
+                premiacaoInput.value = '0,00';
+            }
+        }
+
+        // Eventos que disparam o cálculo da premiação
+        if (textArea) {
+            // Quando colar o texto
+            textArea.addEventListener('paste', function(e) {
+                setTimeout(atualizarPremiacao, 100);
+            });
+
+            // Quando digitar/modificar o texto
+            textArea.addEventListener('input', atualizarPremiacao);
+        }
+
+        // Quando mudar o valor da aposta
+        if (valorInput) {
+            valorInput.addEventListener('input', atualizarPremiacao);
+        }
+
+        // Mantém o evento do botão salvar
+        const btnSalvar = document.querySelector('#btnSalvarDados');
         if (btnSalvar) {
-            btnSalvar.onclick = function(e) {
+            btnSalvar.addEventListener('click', async function(e) {
                 e.preventDefault();
                 
-                // Pegar apostas (ignorando a primeira linha)
-                const linhas = document.querySelector('textarea').value.split('\n');
-                const apostas = linhas.slice(1).filter(linha => linha.trim());
-                
-                // Contar a quantidade de dezenas apostadas
-                const quantidadeDezenas = apostas.length;
-                console.log('Quantidade de dezenas apostadas:', quantidadeDezenas);
-                
-                const dados = {
-                    apostador_id: document.getElementById('apostador').value,
-                    whatsapp: document.getElementById('whatsapp').value,
-                    revendedor_id: document.getElementById('revendedor').value,
-                    valor_premio_2: document.querySelector('input[name="premio"]').value.replace(/\./g, '').replace(',', '.'),
-                    apostas: apostas,
-                    quantidade_dezenas: quantidadeDezenas
-                };
-
-                console.log('Dados sendo enviados:', dados);
-
-                fetch('ajax/salvar_apostas_importadas.php', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(dados)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Resposta do servidor:', data);
-                    if (data.success) {
-                        alert('Apostas salvas com sucesso!');
-                        window.location.href = 'gerenciar_apostas.php';
-                    } else {
-                        alert('Erro: ' + (data.error || 'Erro desconhecido'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro:', error);
-                    alert('Erro ao salvar: ' + error);
-                });
-            };
+                try {
+                    // Primeiro atualiza a premiação
+                    await atualizarPremiacao();
+                    
+                    // Se chegou aqui, a premiação foi calculada com sucesso
+                    // Agora podemos enviar o formulário
+                    this.closest('form').submit();
+                } catch (error) {
+                    console.error('Erro ao salvar:', error);
+                    alert('Erro ao salvar os dados. Por favor, verifique os valores e tente novamente.');
+                }
+            });
         }
     });
     </script>

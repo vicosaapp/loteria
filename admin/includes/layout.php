@@ -1,3 +1,7 @@
+<?php
+// Definir valor padrão para $content
+$content = $content ?? '';
+?>
 <!DOCTYPE html>
 <html>
 <head>
@@ -40,7 +44,7 @@
         }
 
         .sidebar-header .logo {
-            max-width: 120px;
+            max-width: 200px;
             margin-bottom: 10px;
         }
 

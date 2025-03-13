@@ -1,1 +1,52 @@
-DirectoryIndex index.php 
+DirectoryIndex index.php
+
+RewriteEngine On
+
+# Forçar HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Headers CORS para permitir requisições do app
+Header set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+Header set Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+
+# Regras para área administrativa
+RewriteRule ^admin$ admin/ [L,R=301]
+RewriteRule ^admin/$ admin/login.php [L,NC]
+RewriteRule ^admin/dashboard$ admin/dashboard.php [L,NC]
+
+# Regras para área do revendedor
+RewriteRule ^revendedor$ revendedor/ [L,R=301]
+RewriteRule ^revendedor/$ revendedor/login.php [L,NC]
+RewriteRule ^revendedor/dashboard$ revendedor/dashboard.php [L,NC]
+
+# Regras para área do apostador
+RewriteRule ^apostador$ apostador/ [L,R=301]
+RewriteRule ^apostador/$ apostador/login.php [L,NC]
+RewriteRule ^apostador/dashboard$ apostador/dashboard.php [L,NC]
+
+# Permitir acesso direto a arquivos e diretórios existentes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Redirecionar todas as outras requisições para index.php
+RewriteRule ^ index.php [L]
+
+# Proteger o arquivo deploy.php
+<Files "deploy.php">
+    # Permitir acesso apenas do GitHub
+    Order deny,allow
+    Deny from all
+    # IPs do GitHub Webhooks (atualize conforme necessário)
+    Allow from 192.30.252.0/22
+    Allow from 185.199.108.0/22
+    Allow from 140.82.112.0/20
+    Allow from 143.55.64.0/20
+</Files>
+
+# Proteger o arquivo de log de deploy
+<Files "deploy_log.txt">
+    Order deny,allow
+    Deny from all
+</Files> 

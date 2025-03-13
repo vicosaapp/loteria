@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Loteria</string>
+    <string name="app_logo">Logo do aplicativo</string>
+    
+    <!-- Login -->
+    <string name="email">E-mail</string>
+    <string name="senha">Senha</string>
+    <string name="entrar">Entrar</string>
+    
+    <!-- Dashboard -->
+    <string name="resumo_semanal">Resumo Semanal</string>
+    <string name="total_apostas">Total de Apostas</string>
+    <string name="valor_total">Valor Total</string>
+    
+    <!-- Erros -->
+    <string name="erro_conexao">Erro de conexão</string>
+    <string name="erro_login">Email ou senha inválidos</string>
+    <string name="erro_conta_bloqueada">Conta bloqueada ou inativa</string>
+    <string name="erro_campos_vazios">Preencha todos os campos</string>
+    <string name="erro_resposta">Erro ao processar resposta</string>
+    <string name="erro_sessao_expirada">Sessão expirada. Por favor, faça login novamente.</string>
+</resources> 

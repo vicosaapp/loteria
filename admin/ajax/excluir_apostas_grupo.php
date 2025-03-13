@@ -14,14 +14,14 @@ try {
     // Recebe os dados
     $dados = json_decode(file_get_contents('php://input'), true);
     
-    if (!$dados || !isset($dados['usuario_id']) || !isset($dados['jogo_nome'])) {
-        throw new Exception('Dados inválidos');
+    if (!isset($dados['usuario_id']) || !isset($dados['jogo_nome'])) {
+        throw new Exception('Dados incompletos');
     }
     
     // Inicia a transação
     $pdo->beginTransaction();
     
-    // Exclui apostas importadas
+    // Exclui as apostas do grupo
     $stmt = $pdo->prepare("
         DELETE FROM apostas_importadas 
         WHERE usuario_id = ? 
@@ -37,17 +37,14 @@ try {
         'success' => true,
         'message' => 'Apostas excluídas com sucesso!'
     ]);
-
+    
 } catch (Exception $e) {
-    // Em caso de erro, reverte a transação
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
     
-    error_log("Erro ao excluir apostas: " . $e->getMessage());
-    
     echo json_encode([
         'success' => false,
-        'error' => 'Erro ao excluir apostas: ' . $e->getMessage()
+        'error' => $e->getMessage()
     ]);
 } 

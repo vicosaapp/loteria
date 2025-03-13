@@ -1,46 +1,44 @@
 <?php
-session_start();
 require_once '../../config/database.php';
 
-// Verifica se é admin
-if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
-    die(json_encode(['success' => false, 'message' => 'Acesso negado']));
-}
-
-// Pega os dados do POST
-$data = json_decode(file_get_contents('php://input'), true);
+header('Content-Type: application/json');
 
 try {
-    // Validações básicas
-    if (empty($data['id']) || empty($data['nome']) || empty($data['email'])) {
+    // Validar dados recebidos
+    if (empty($_POST['nome']) || empty($_POST['email']) || empty($_POST['senha']) || empty($_POST['tipo'])) {
         throw new Exception('Dados incompletos');
     }
 
-    // Verifica se o email já existe para outro usuário
-    $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE email = ? AND id != ?");
-    $stmt->execute([$data['email'], $data['id']]);
+    // Preparar os dados
+    $nome = trim($_POST['nome']);
+    $email = trim($_POST['email']);
+    $whatsapp = trim($_POST['whatsapp']);
+    $senha = password_hash($_POST['senha'], PASSWORD_DEFAULT);
+    $tipo = $_POST['tipo'];
+    $comissao = isset($_POST['comissao']) ? floatval($_POST['comissao']) : 0;
+
+    // Verificar se email já existe
+    $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE email = ?");
+    $stmt->execute([$email]);
     if ($stmt->rowCount() > 0) {
-        throw new Exception('Este email já está em uso');
+        throw new Exception('Email já cadastrado');
     }
 
-    // Prepara a atualização
-    if (!empty($data['senha'])) {
-        // Se tem senha nova, atualiza com a senha
-        $stmt = $pdo->prepare("UPDATE usuarios SET nome = ?, email = ?, telefone = ?, senha = ? WHERE id = ? AND tipo = 'usuario'");
-        $senha_hash = password_hash($data['senha'], PASSWORD_DEFAULT);
-        $stmt->execute([$data['nome'], $data['email'], $data['telefone'], $senha_hash, $data['id']]);
-    } else {
-        // Se não tem senha nova, atualiza só nome, email e telefone
-        $stmt = $pdo->prepare("UPDATE usuarios SET nome = ?, email = ?, telefone = ? WHERE id = ? AND tipo = 'usuario'");
-        $stmt->execute([$data['nome'], $data['email'], $data['telefone'], $data['id']]);
-    }
+    // Inserir novo usuário
+    $sql = "INSERT INTO usuarios (nome, email, whatsapp, senha, tipo, comissao) VALUES (?, ?, ?, ?, ?, ?)";
+    $stmt = $pdo->prepare($sql);
+    $result = $stmt->execute([$nome, $email, $whatsapp, $senha, $tipo, $comissao]);
 
-    if ($stmt->rowCount() > 0) {
+    if ($result) {
         echo json_encode(['success' => true]);
     } else {
-        throw new Exception('Nenhuma alteração realizada');
+        throw new Exception('Erro ao inserir usuário');
     }
 
 } catch (Exception $e) {
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    error_log('Erro ao salvar usuário: ' . $e->getMessage());
+    echo json_encode([
+        'success' => false,
+        'message' => $e->getMessage()
+    ]);
 } 

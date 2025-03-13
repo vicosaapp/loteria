@@ -1,1069 +1,599 @@
 <?php
-require_once 'includes/header.php';
 require_once '../config/database.php';
+require_once 'includes/header.php';
+
+// Verifica se é admin
+if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
+    header("Location: ../login.php");
+    exit();
+}
 
 // Define a página atual para o menu
 $currentPage = 'resultados';
 
-if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
-    header('Location: login.php');
-    exit;
+// URLs das APIs da Caixa
+$api_urls = [
+    'quina' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/quina/',
+    'megasena' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena/',
+    'lotofacil' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/',
+    'lotomania' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotomania/',
+    'timemania' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/timemania/',
+    'duplasena' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/duplasena/',
+    'maismilionaria' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/maismilionaria/',
+    'diadesorte' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/diadesorte/'
+];
+
+function buscarResultado($url) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
+    $headers = [
+        'Accept: application/json',
+        'Content-Type: application/json',
+        'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    ];
+    
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    
+    $response = curl_exec($ch);
+    $error = curl_error($ch);
+    curl_close($ch);
+    
+    if ($error) {
+        throw new Exception("Erro ao buscar resultados: " . $error);
+    }
+    
+    $data = json_decode($response, true);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        throw new Exception("Erro ao decodificar resposta da API: " . json_last_error_msg());
+    }
+    
+    return $data;
 }
+
+function salvarResultado($pdo, $jogo_id, $numero_concurso, $data_sorteio, $dezenas, $resultado = []) {
+    try {
+        $pdo->beginTransaction();
+        
+        // Formata a data corretamente
+        $data_sorteio = date('Y-m-d', strtotime(str_replace('/', '-', $data_sorteio)));
+        
+        // Verifica se o concurso já existe
+        $stmt = $pdo->prepare("SELECT id FROM concursos WHERE jogo_id = ? AND codigo = ?");
+        $stmt->execute([$jogo_id, $numero_concurso]);
+        $concurso_existente = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($concurso_existente) {
+            // Atualiza concurso existente
+            $stmt = $pdo->prepare("UPDATE concursos SET data_sorteio = ?, status = 'finalizado' WHERE id = ?");
+            $stmt->execute([$data_sorteio, $concurso_existente['id']]);
+            $concurso_id = $concurso_existente['id'];
+            
+            // Remove números antigos
+            $stmt = $pdo->prepare("DELETE FROM numeros_sorteados WHERE concurso_id = ?");
+            $stmt->execute([$concurso_id]);
+        } else {
+            // Insere novo concurso
+            $stmt = $pdo->prepare("INSERT INTO concursos (jogo_id, codigo, data_sorteio, status) VALUES (?, ?, ?, 'finalizado')");
+            $stmt->execute([$jogo_id, $numero_concurso, $data_sorteio]);
+            $concurso_id = $pdo->lastInsertId();
+        }
+        
+        // Insere números sorteados
+        if (!empty($dezenas)) {
+            $stmt = $pdo->prepare("INSERT INTO numeros_sorteados (concurso_id, numero) VALUES (?, ?)");
+            foreach ($dezenas as $dezena) {
+                $stmt->execute([$concurso_id, intval($dezena)]);
+            }
+        }
+        
+        // Atualiza informações adicionais do jogo
+        $stmt = $pdo->prepare("UPDATE jogos SET 
+            valor_acumulado = ?,
+            data_proximo_concurso = ?,
+            valor_estimado_proximo = ?,
+            numero_concurso = ?
+            WHERE id = ?");
+        
+        $data_proximo = null;
+        if (!empty($resultado['dataProximoConcurso'])) {
+            $data_proximo = date('Y-m-d', strtotime(str_replace('/', '-', $resultado['dataProximoConcurso'])));
+        }
+        
+        $stmt->execute([
+            floatval($resultado['valorAcumulado'] ?? 0),
+            $data_proximo,
+            floatval($resultado['valorEstimadoProximoConcurso'] ?? 0),
+            $numero_concurso,
+            $jogo_id
+        ]);
+        
+        $pdo->commit();
+        return true;
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Erro ao salvar resultado: " . $e->getMessage());
+        throw $e;
+    }
+}
+
+function formatarValor($valor) {
+    return 'R$ ' . number_format($valor, 2, ',', '.');
+}
+
+$mensagem = '';
+$tipo_mensagem = '';
+$resultados = [];
+$resultados_banco = [];
 
 try {
-    // Buscar totais para os cards informativos
-    $stmt = $pdo->query("SELECT COUNT(*) FROM resultados");
-    $totalResultados = $stmt->fetchColumn();
-    
-    $stmt = $pdo->query("SELECT COUNT(*) FROM ganhadores");
-    $totalGanhadores = $stmt->fetchColumn();
-    
-    $stmt = $pdo->query("SELECT COALESCE(SUM(premio), 0) FROM ganhadores");
-    $totalPremios = $stmt->fetchColumn();
-    
-    // Buscar jogos ativos
-    $stmt = $pdo->query("
-        SELECT j.*, 
-               (SELECT COUNT(*) FROM resultados WHERE tipo_jogo_id = j.id) as total_resultados
-        FROM jogos j 
-        WHERE j.status = 1 
-        ORDER BY j.created_at DESC
-    ");
-    $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Buscar todos os últimos resultados com contagem de ganhadores
-    $resultados = [];
-    $stmt = $pdo->query("
-        SELECT r.*, 
-               COUNT(DISTINCT g.id) as total_ganhadores,
-               COALESCE(SUM(g.premio), 0) as total_premios
-        FROM resultados r 
-        INNER JOIN (
-            SELECT tipo_jogo_id, MAX(data_sorteio) as ultima_data
-            FROM resultados
-            GROUP BY tipo_jogo_id
-        ) ultimos ON r.tipo_jogo_id = ultimos.tipo_jogo_id 
-                  AND r.data_sorteio = ultimos.ultima_data
-        LEFT JOIN ganhadores g ON g.resultado_id = r.id
-        GROUP BY r.id
-    ");
-    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $resultados[$row['tipo_jogo_id']] = $row;
+    // Se foi solicitada atualização manual
+    if (isset($_POST['atualizar'])) {
+        echo "<!-- Iniciando atualização dos resultados -->";
+        foreach ($api_urls as $jogo => $url) {
+            try {
+                echo "<!-- Buscando resultado para $jogo na URL: $url -->";
+                $resultado = buscarResultado($url);
+                
+                if ($resultado) {
+                    $resultados[$jogo] = $resultado;
+                    
+                    // Salvar no banco de dados
+                    $stmt = $pdo->prepare("SELECT id FROM jogos WHERE LOWER(identificador_api) = LOWER(?)");
+                    $stmt->execute([$jogo]);
+                    $jogo_db = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($jogo_db) {
+                        echo "<!-- Salvando resultado para jogo ID: " . $jogo_db['id'] . " -->";
+                        
+                        // Prepara as dezenas na ordem correta
+                        $dezenas = isset($resultado['listaDezenas']) ? $resultado['listaDezenas'] : [];
+                        
+                        // Prepara os dados do resultado
+                        $dados_resultado = [
+                            'valorAcumulado' => $resultado['valorAcumuladoProximoConcurso'] ?? 0,
+                            'dataProximoConcurso' => $resultado['dataProximoConcurso'] ?? null,
+                            'valorEstimadoProximoConcurso' => $resultado['valorEstimadoProximoConcurso'] ?? 0
+                        ];
+                        
+                        // Se for Dupla Sena, inclui as dezenas do segundo sorteio
+                        if ($jogo === 'duplasena' && isset($resultado['listaDezenasSegundoSorteio'])) {
+                            $dezenas = array_merge($dezenas, $resultado['listaDezenasSegundoSorteio']);
+                        }
+                        
+                        salvarResultado(
+                            $pdo,
+                            $jogo_db['id'],
+                            $resultado['numero'],
+                            $resultado['dataApuracao'],
+                            $dezenas,
+                            $dados_resultado
+                        );
+                    } else {
+                        echo "<!-- Jogo não encontrado no banco: $jogo -->";
+                    }
+                } else {
+                    echo "<!-- Sem dados no resultado para $jogo -->";
+                }
+            } catch (Exception $e) {
+                echo "<!-- Erro ao buscar $jogo: " . $e->getMessage() . " -->";
+                error_log("Erro ao buscar resultado do $jogo: " . $e->getMessage());
+            }
+        }
+        $mensagem = "Resultados atualizados com sucesso!";
+        $tipo_mensagem = "success";
     }
-} catch(PDOException $e) {
-    die("Erro ao buscar informações: " . $e->getMessage());
+    
+    // Buscar resultados do banco
+    $sql = "
+        SELECT 
+            j.id,
+            j.nome,
+            j.identificador_api,
+            j.numero_concurso,
+            c.codigo as numero_concurso_atual,
+            c.data_sorteio,
+            GROUP_CONCAT(DISTINCT ns.numero ORDER BY ns.numero ASC) as dezenas,
+            j.valor_acumulado,
+            j.data_proximo_concurso,
+            j.valor_estimado_proximo,
+            c.id as concurso_id
+        FROM jogos j
+        LEFT JOIN (
+            SELECT c1.*
+            FROM concursos c1
+            INNER JOIN (
+                SELECT jogo_id, MAX(data_sorteio) as ultima_data
+                FROM concursos
+                WHERE status = 'finalizado'
+                GROUP BY jogo_id
+            ) c2 ON c1.jogo_id = c2.jogo_id AND c1.data_sorteio = c2.ultima_data
+        ) c ON j.id = c.jogo_id
+        LEFT JOIN numeros_sorteados ns ON ns.concurso_id = c.id
+        WHERE j.status = 1 AND j.identificador_api IS NOT NULL
+        GROUP BY 
+            j.id, j.nome, j.identificador_api, j.numero_concurso,
+            c.codigo, c.data_sorteio, j.valor_acumulado,
+            j.data_proximo_concurso, j.valor_estimado_proximo,
+            c.id
+        ORDER BY j.nome ASC
+    ";
+    
+    echo "<!-- Executando query: " . str_replace(['-->', '<!--'], '', $sql) . " -->";
+    
+    $stmt = $pdo->query($sql);
+    if ($stmt) {
+        $resultados_banco = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo "<!-- Número de resultados encontrados: " . count($resultados_banco) . " -->";
+        foreach ($resultados_banco as $resultado) {
+            echo "<!-- 
+                Jogo: " . $resultado['nome'] . "
+                API: " . $resultado['identificador_api'] . "
+                Concurso: " . ($resultado['numero_concurso'] ?? 'N/A') . "
+                Dezenas: " . ($resultado['dezenas'] ?? 'N/A') . "
+            -->";
+        }
+    } else {
+        echo "<!-- Erro ao executar a query -->";
+        var_dump($pdo->errorInfo());
+    }
+    
+} catch (Exception $e) {
+    echo "<!-- Erro geral: " . $e->getMessage() . " -->";
+    $mensagem = "Erro: " . $e->getMessage();
+    $tipo_mensagem = "danger";
 }
-
-ob_start();
 ?>
 
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciar Resultados</title>
-    <!-- Seus estilos e scripts aqui -->
-</head>
-<body>
-    <?php include_once 'includes/header.php'; ?>
-    
-    <div class="container">
-        <!-- Cards informativos -->
-        <div class="info-cards">
-            <div class="info-card">
-                <div class="info-icon">
-                    <i class="fas fa-trophy"></i>
-                </div>
-                <div class="info-content">
-                    <h3>Total de Resultados</h3>
-                    <p class="info-value"><?php echo $totalResultados; ?></p>
-                </div>
-            </div>
-            
-            <div class="info-card">
-                <div class="info-icon">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="info-content">
-                    <h3>Total de Ganhadores</h3>
-                    <p class="info-value"><?php echo $totalGanhadores; ?></p>
-                </div>
-            </div>
-            
-            <div class="info-card">
-                <div class="info-icon">
-                    <i class="fas fa-dollar-sign"></i>
-                </div>
-                <div class="info-content">
-                    <h3>Total em Prêmios</h3>
-                    <p class="info-value">R$ <?php echo number_format($totalPremios, 2, ',', '.'); ?></p>
-                </div>
-            </div>
+<div class="container-fluid">
+    <div class="page-header">
+        <div class="header-content">
+            <h1><i class="fas fa-trophy"></i> Resultados dos Jogos</h1>
+            <p>Resultados oficiais das Loterias Caixa</p>
         </div>
-        
-        <!-- Grid de jogos -->
-        <div class="games-grid">
-            <?php if(empty($jogos)): ?>
-                <div class="no-data-message">
-                    <i class="fas fa-trophy"></i>
-                    <h3>Nenhum Jogo Disponível</h3>
-                    <p>Não há jogos ativos para adicionar resultados.</p>
-                </div>
-            <?php else: ?>
-                <?php foreach($jogos as $jogo): 
-                    $temResultado = isset($resultados[$jogo['id']]);
-                    $cardClass = $temResultado ? 'game-card has-result' : 'game-card';
-                ?>
-                    <div class="<?php echo $cardClass; ?>">
-                        <div class="card-header">
-                            <h3><?php echo htmlspecialchars($jogo['nome']); ?></h3>
-                            <span class="badge"><?php echo $jogo['dezenas_premiar']; ?> números</span>
-                        </div>
-                        
-                        <div class="card-stats">
-                            <div class="stat-item">
-                                <div class="label">Total de Números</div>
-                                <div class="value"><?php echo $jogo['total_numeros']; ?></div>
-                            </div>
-                            <div class="stat-item">
-                                <div class="label">Prêmio</div>
-                                <div class="value">R$ <?php echo number_format($jogo['premio'], 2, ',', '.'); ?></div>
-                            </div>
-                        </div>
+        <form method="post" class="d-inline">
+            <button type="submit" name="atualizar" class="btn-update">
+                <i class="fas fa-sync-alt"></i>
+                <span>Atualizar Resultados</span>
+            </button>
+        </form>
+    </div>
 
-                        <?php if($temResultado): 
-                            $resultado = $resultados[$jogo['id']];
-                        ?>
-                            <div class="resultado-info">
-                                <div class="resultado-data">
-                                    <i class="fas fa-calendar"></i>
-                                    <span>Último Sorteio: <?php echo date('d/m/Y', strtotime($resultado['data_sorteio'])); ?></span>
-                                </div>
-                                <div class="numeros-sorteados">
-                                    <label>Números Sorteados:</label>
-                                    <div class="numbers-grid">
-                                        <?php foreach(explode(',', $resultado['numeros']) as $numero): ?>
-                                            <div class="number"><?php echo str_pad($numero, 2, '0', STR_PAD_LEFT); ?></div>
-                                        <?php endforeach; ?>
+    <?php if ($mensagem): ?>
+        <div class="alert alert-<?php echo $tipo_mensagem; ?>" role="alert">
+            <?php echo $mensagem; ?>
+        </div>
+    <?php endif; ?>
+
+    <div class="results-grid">
+        <?php if (empty($resultados_banco)): ?>
+            <div class="alert alert-info" role="alert">
+                Nenhum resultado encontrado. Clique em "Atualizar Resultados" para buscar os últimos resultados.
+            </div>
+        <?php else: ?>
+            <?php foreach ($resultados_banco as $resultado): ?>
+                <div class="result-card <?php echo htmlspecialchars($resultado['identificador_api'] ?? ''); ?>">
+                    <div class="card-header">
+                        <div class="header-content">
+                            <h3><?php echo htmlspecialchars($resultado['nome'] ?? ''); ?></h3>
+                            <?php if (!empty($resultado['numero_concurso'])): ?>
+                                <span class="concurso">Concurso <?php echo htmlspecialchars($resultado['numero_concurso']); ?></span>
+                                <span class="data"><?php echo !empty($resultado['data_sorteio']) ? date('d/m/Y', strtotime($resultado['data_sorteio'])) : ''; ?></span>
+                            <?php else: ?>
+                                <span class="concurso">Aguardando resultados</span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="logo-container">
+                            <?php if (!empty($resultado['identificador_api'])): ?>
+                                <img src="../assets/images/logos/<?php echo htmlspecialchars($resultado['identificador_api']); ?>.png" 
+                                     alt="<?php echo htmlspecialchars($resultado['nome']); ?>"
+                                     class="jogo-logo"
+                                     onerror="this.src='../assets/images/logos/default.png'">
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body">
+                        <?php if (!empty($resultado['dezenas'])): ?>
+                            <div class="numbers-grid">
+                                <?php 
+                                $dezenas = explode(',', $resultado['dezenas']);
+                                foreach ($dezenas as $dezena): 
+                                ?>
+                                    <div class="number"><?php echo str_pad($dezena, 2, '0', STR_PAD_LEFT); ?></div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <?php if (!empty($resultado['valor_acumulado'])): ?>
+                                <div class="premio-info">
+                                    <div class="acumulado">
+                                        <span class="label">Acumulado para próximo concurso</span>
+                                        <span class="value"><?php echo formatarValor($resultado['valor_acumulado']); ?></span>
                                     </div>
                                 </div>
-                                
-                                <!-- Adicionar informações de ganhadores -->
-                                <div class="ganhadores-info">
-                                    <div class="ganhadores-item">
-                                        <i class="fas fa-trophy"></i>
-                                        <span><?php echo $resultado['total_ganhadores']; ?> ganhador<?php echo $resultado['total_ganhadores'] != 1 ? 'es' : ''; ?></span>
-                                    </div>
-                                    <?php if($resultado['total_ganhadores'] > 0): ?>
-                                        <div class="ganhadores-item">
-                                            <i class="fas fa-money-bill-wave"></i>
-                                            <span>Total Prêmios: R$ <?php echo number_format($resultado['total_premios'], 2, ',', '.'); ?></span>
+                            <?php endif; ?>
+
+                            <?php if (!empty($resultado['data_proximo_concurso'])): ?>
+                                <div class="proximo-sorteio">
+                                    <h4>Próximo Sorteio</h4>
+                                    <div class="info">
+                                        <div class="data">
+                                            <i class="far fa-calendar-alt"></i>
+                                            <span><?php echo date('d/m/Y', strtotime($resultado['data_proximo_concurso'])); ?></span>
                                         </div>
-                                    <?php endif; ?>
+                                        <?php if (!empty($resultado['valor_estimado_proximo'])): ?>
+                                            <div class="estimativa">
+                                                <span class="label">Prêmio Estimado:</span>
+                                                <span class="value"><?php echo formatarValor($resultado['valor_estimado_proximo']); ?></span>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
-                                
-                                <button onclick="excluirResultado(<?php echo $resultado['id']; ?>, <?php echo $jogo['id']; ?>)" 
-                                        class="btn-delete-result">
-                                    <i class="fas fa-trash"></i>
-                                    Excluir Resultado
-                                </button>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <div class="alert alert-info">
+                                Nenhum resultado disponível para este jogo.
                             </div>
                         <?php endif; ?>
-                        
-                        <button onclick="abrirModalResultado(<?php echo $jogo['id']; ?>, <?php echo $jogo['dezenas_premiar']; ?>)" 
-                                class="btn-add-result">
-                            <i class="fas fa-plus"></i>
-                            <span><?php echo $temResultado ? 'Novo Resultado' : 'Adicionar Resultado'; ?></span>
-                        </button>
                     </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
+                </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </div>
-    
-    <!-- Modal de Resultado -->
-    <?php include_once 'includes/modal_resultado.php'; ?>
-    
-    <!-- Seus scripts JS aqui -->
-</body>
-</html>
+</div>
 
 <style>
-/* Seus estilos existentes */
-
-/* Ajuste o container principal */
-.page-container {
-    padding: 20px 20px 20px 40px;
-    margin-left: 240px;
-    width: calc(100% - 240px);
-    min-height: 100vh;
-    background: #f8f9fa;
-}
-
-/* Ajuste o grid para exatamente 3 cards por linha */
-.cards-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr); /* Força 3 colunas */
-    gap: 25px;
-    margin-right: 20px;
-}
-
-/* Ajuste os cards */
-.game-card {
-    background: white;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    transition: all 0.3s ease;
-    height: 100%; /* Garante mesma altura */
-}
-
-/* Ajuste o dashboard stats também para 3 colunas */
-.dashboard-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 25px;
-    margin-bottom: 30px;
-    margin-right: 20px;
-}
-
-/* Ajuste responsivo */
-@media (max-width: 1400px) {
-    .cards-grid {
-        grid-template-columns: repeat(2, 1fr); /* 2 cards por linha */
-    }
-    
-    .dashboard-stats {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 1000px) {
-    .cards-grid {
-        grid-template-columns: 1fr; /* 1 card por linha */
-    }
-    
-    .dashboard-stats {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
-    .page-container {
-        margin-left: 0;
-        width: 100%;
-        padding: 15px;
-    }
-    
-    .cards-grid, 
-    .dashboard-stats {
-        margin-right: 0;
-    }
-}
-
-/* Mantenha os outros estilos iguais... */
-
-/* Estilos para o Modal de Ganhadores */
-.winners-list {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    max-height: 70vh;
-    overflow-y: auto;
-    padding: 10px;
-}
-
-.winner-card {
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    overflow: hidden;
-}
-
-.winner-header {
-    background: linear-gradient(135deg, #4e73df, #224abe);
-    padding: 15px;
+.page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
-
-.winner-header h3 {
-    color: white;
-    margin: 0;
-    font-size: 1.1rem;
-}
-
-.winner-info {
-    padding: 15px;
-}
-
-.info-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-}
-
-.prize {
-    color: #27ae60;
-    font-size: 1.2rem;
-}
-
-.numbers-info {
-    margin-top: 15px;
-}
-
-.numbers-row {
-    margin-bottom: 15px;
-}
-
-.numbers-row span {
-    display: block;
-    margin-bottom: 5px;
-    color: #666;
-}
-
-.numbers-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-}
-
-.number {
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid #4e73df;
-    border-radius: 50%;
-    font-size: 0.9rem;
-    color: #4e73df;
-}
-
-.number.winner {
-    background: #4e73df;
-    color: white;
-}
-
-.status-badge {
-    padding: 5px 10px;
-    border-radius: 15px;
-    font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.status-badge.pendente {
-    background: #f39c12;
-    color: white;
-}
-
-.status-badge.pago {
-    background: #27ae60;
-    color: white;
-}
-
-.no-winners {
-    text-align: center;
-    padding: 40px;
-}
-
-.no-winners i {
-    font-size: 48px;
-    color: #95a5a6;
-    margin-bottom: 20px;
-}
-
-.no-winners p {
-    color: #666;
-    font-size: 1.1rem;
-}
-
-/* Cards Informativos */
-.info-cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
     margin-bottom: 30px;
-}
-
-.info-card {
-    background: white;
-    border-radius: 10px;
     padding: 20px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
+    background: white;
+    border-radius: 10px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: transform 0.3s ease;
 }
 
-.info-card:hover {
+.btn-update {
+    background: #00ff7f;
+    color: #000;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-update:hover {
+    background: #00ff95;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,255,127,0.4);
+}
+
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    padding: 20px;
+}
+
+.result-card {
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.result-card:hover {
     transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
 
-.info-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: rgb(103 185 90 / 37%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.info-icon i {
-    font-size: 24px;
-    color: #2c3e50;
-}
-
-.info-content h3 {
-    margin: 0;
-    font-size: 0.9rem;
-    color: #666;
-}
-
-.info-value {
-    margin: 5px 0 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-/* Grid de Jogos */
-.games-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    padding: 20px 0;
-}
-
-.game-card {
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    padding: 20px;
-    transition: all 0.3s ease;
-    border: 1px solid #e3e6f0;
-}
-
-.game-card.has-result {
-    background: #efd9d9;
-    border-color: #fd0000;
-}
+/* Cores específicas para cada jogo */
+.result-card.megasena .card-header { background: #209869; }
+.result-card.lotofacil .card-header { background: #930089; }
+.result-card.quina .card-header { background: #260085; }
+.result-card.lotomania .card-header { background: #F78100; }
+.result-card.timemania .card-header { background: #00FF48; }
+.result-card.duplasena .card-header { background: #A61324; }
+.result-card.maismilionaria .card-header { background: #930089; }
+.result-card.diadesorte .card-header { background: #CB8E37; }
 
 .card-header {
+    padding: 15px 20px;
+    color: white;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #edf2f7;
+}
+
+.header-content {
+    flex-grow: 1;
 }
 
 .card-header h3 {
     margin: 0;
-    color: #2d3748;
-    font-size: 1.25rem;
+    font-size: 1.4rem;
+    font-weight: 700;
 }
 
-.badge {
-    background: #4e73df;
-    color: white;
-    padding: 5px 10px;
-    border-radius: 15px;
-    font-size: 0.875rem;
-}
-
-.card-stats {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    margin-bottom: 15px;
-}
-
-.stat-item {
-    padding: 10px;
-    background: #f8f9fc;
-    border-radius: 8px;
-    text-align: center;
-}
-
-.stat-item .label {
-    font-size: 0.875rem;
-    color: #858796;
-    margin-bottom: 5px;
-}
-
-.stat-item .value {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #4e73df;
-}
-
-.resultado-info {
-    background: white;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 15px;
-}
-
-.resultado-data {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #5a5c69;
-    margin-bottom: 10px;
-}
-
-.numeros-sorteados {
-    margin: 15px 0;
-}
-
-.numeros-sorteados label {
+.concurso {
+    font-size: 0.9rem;
+    opacity: 0.9;
     display: block;
-    margin-bottom: 8px;
-    color: #4e73df;
-    font-weight: 500;
+    margin-top: 5px;
+}
+
+.data {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.logo-container {
+    width: 60px;
+    height: 60px;
+    margin-left: 15px;
+}
+
+.jogo-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.card-body {
+    padding: 20px;
 }
 
 .numbers-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 15px;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
 }
 
 .number {
-    width: 35px;
-    height: 35px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #4e73df;
-    color: white;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
-    font-weight: 600;
-    font-size: 0.875rem;
-}
-
-.btn-add-result {
-    width: 100%;
-    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: white;
     background: #4e73df;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
 }
 
-.btn-add-result:hover {
-    background: #2e59d9;
-}
+/* Cores dos números para cada jogo */
+.megasena .number { background: #209869; }
+.lotofacil .number { background: #930089; }
+.quina .number { background: #260085; }
+.lotomania .number { background: #F78100; }
+.timemania .number { background: #00FF48; color: #000; }
+.duplasena .number { background: #A61324; }
+.maismilionaria .number { background: #930089; }
+.diadesorte .number { background: #CB8E37; }
 
-.btn-delete-result {
-    width: 100%;
-    padding: 10px;
-    background: #e74a3b;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    margin-top: 10px;
-}
-
-.btn-delete-result:hover {
-    background: #be3c2f;
-}
-
-/* Responsividade */
-@media (max-width: 1200px) {
-    .info-cards {
-        grid-template-columns: repeat(3, 1fr);
-    }
-    .games-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 768px) {
-    .info-cards {
-        grid-template-columns: repeat(1, 1fr);
-    }
-    .games-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Ajuste dos cards existentes */
-.game-card {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-}
-
-.card-body {
-    flex: 1;
-}
-
-/* Espaçamento geral */
-.page-content {
-    padding: 20px;
-    max-width: 1400px;
-    margin: 0 auto;
-}
-
-/* Ajustes no Modal */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 1000;
-    overflow-y: auto;
-    padding: 20px;
-}
-
-.modal-content {
-    background: white;
-    border-radius: 10px;
-    margin: 20px auto;
-    width: 95%;
-    max-width: 900px; /* Aumentado para melhor visualização */
-    position: relative;
-    padding: 20px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.modal-header {
-    padding-bottom: 15px;
-    margin-bottom: 20px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    color: #2c3e50;
-}
-
-.modal-body {
-    max-height: calc(100vh - 200px);
-    overflow-y: auto;
-    padding: 0 10px;
-}
-
-/* Grid de Números */
-.numbers-grid-select {
-    display: grid;
-    grid-template-columns: repeat(10, 1fr);
-    gap: 8px;
-    margin: 15px 0;
-    padding: 15px;
-    background: #f8f9fc;
-    border-radius: 8px;
-}
-
-.number-select {
-    width: 40px; /* Tamanho fixo para os números */
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid #4e73df;
-    border-radius: 50%;
-    font-size: 1rem;
-    color: #4e73df;
-    background: white;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    margin: 0 auto;
-}
-
-.number-select:hover {
-    transform: scale(1.1);
-    background: #f8f9fc;
-}
-
-.number-select.selected {
-    background: #4e73df;
-    color: white;
-}
-
-/* Formulário */
-.form-group {
-    margin-bottom: 20px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 8px;
-    color: #2c3e50;
-    font-weight: 500;
-}
-
-.form-control {
-    width: 100%;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 1rem;
-}
-
-/* Botões do Modal */
-.modal-footer {
+.premio-info {
     margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid #eee;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-    position: sticky;
-    bottom: 0;
-    background: white;
-}
-
-.btn-secondary,
-.btn-primary {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    font-size: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.btn-secondary {
-    background: #6c757d;
-    color: white;
-}
-
-.btn-secondary:hover {
-    background: #5a6268;
-}
-
-.btn-primary {
-    background: #4e73df;
-    color: white;
-}
-
-.btn-primary:hover {
-    background: #2e59d9;
-}
-
-/* Botão Fechar */
-.close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: #666;
-    cursor: pointer;
-    padding: 5px;
-}
-
-.close:hover {
-    color: #333;
-}
-
-/* Responsividade */
-@media (max-width: 768px) {
-    .numbers-grid-select {
-        grid-template-columns: repeat(5, 1fr);
-        gap: 5px;
-    }
-
-    .number-select {
-        width: 35px;
-        height: 35px;
-        font-size: 0.9rem;
-    }
-
-    .modal-content {
-        margin: 10px;
-        padding: 15px;
-    }
-}
-
-/* Adicione ao bloco de estilos */
-.ganhadores-info {
-    margin: 15px 0;
     padding: 15px;
-    background: #f9ff00;
+    background: #f8f9fc;
     border-radius: 8px;
 }
 
-.ganhadores-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-    color: #1f2125;
-    font-weight: 500;
-}
-
-.ganhadores-item:last-child {
-    margin-bottom: 0;
-}
-
-.ganhadores-item i {
-    width: 20px;
+.acumulado {
     text-align: center;
 }
 
-.ganhadores-item span {
-    font-size: 0.95rem;
+.acumulado .label {
+    display: block;
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.acumulado .value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #209869;
+}
+
+.proximo-sorteio {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e3e6f0;
+}
+
+.proximo-sorteio h4 {
+    font-size: 1rem;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.proximo-sorteio .info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.proximo-sorteio .data {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.estimativa {
+    text-align: right;
+}
+
+.estimativa .label {
+    display: block;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.estimativa .value {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #209869;
+}
+
+@media (max-width: 768px) {
+    .results-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .btn-update {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .proximo-sorteio .info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .estimativa {
+        text-align: left;
+        width: 100%;
+    }
 }
 </style>
 
 <script>
-/* Seus scripts existentes */
+// Atualização automática a cada 30 minutos
+setInterval(function() {
+    document.querySelector('button[name="atualizar"]').click();
+}, 1800000); // 30 minutos em milissegundos
 
-function verGanhadores(jogoId) {
-    fetch(`ajax/buscar_ganhadores.php?jogo_id=${jogoId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                mostrarModalGanhadores(data.data);
-            } else {
-                alert(data.message || 'Erro ao buscar ganhadores');
-            }
-        })
-        .catch(error => {
-            alert('Erro ao buscar ganhadores: ' + error.message);
-        });
-}
-
-function mostrarModalGanhadores(ganhadores) {
-    // Cria o conteúdo do modal
-    let html = `
-        <div class="modal-header">
-            <h2>Ganhadores</h2>
-            <button type="button" class="close" onclick="fecharModalGanhadores()">&times;</button>
-        </div>
-        <div class="modal-body">
-    `;
+// Animação dos números
+document.querySelectorAll('.number').forEach(number => {
+    number.addEventListener('mouseover', function() {
+        this.style.transform = 'scale(1.1)';
+    });
     
-    if (ganhadores.length === 0) {
-        html += `
-            <div class="no-winners">
-                <i class="fas fa-trophy"></i>
-                <p>Nenhum ganhador encontrado</p>
-            </div>
-        `;
-    } else {
-        html += `
-            <div class="winners-list">
-                ${ganhadores.map(ganhador => `
-                    <div class="winner-card">
-                        <div class="winner-header">
-                            <h3>${ganhador.usuario_nome}</h3>
-                            <span class="status-badge ${ganhador.status}">
-                                ${ganhador.status === 'pago' ? 'Prêmio Pago' : 'Pendente'}
-                            </span>
-                        </div>
-                        <div class="winner-info">
-                            <div class="info-row">
-                                <span>Data do Sorteio:</span>
-                                <strong>${ganhador.data_sorteio_formatada}</strong>
-                            </div>
-                            <div class="info-row">
-                                <span>Prêmio:</span>
-                                <strong class="prize">R$ ${ganhador.premio_formatado}</strong>
-                            </div>
-                            <div class="numbers-info">
-                                <div class="numbers-row">
-                                    <span>Números Apostados:</span>
-                                    <div class="numbers-grid">
-                                        ${ganhador.numeros_apostados.map(num => 
-                                            `<div class="number">${num.padStart(2, '0')}</div>`
-                                        ).join('')}
-                                    </div>
-                                </div>
-                                <div class="numbers-row">
-                                    <span>Números Sorteados:</span>
-                                    <div class="numbers-grid">
-                                        ${ganhador.numeros_sorteados.map(num => 
-                                            `<div class="number winner">${num.padStart(2, '0')}</div>`
-                                        ).join('')}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
-    
-    html += `</div>`;
-    
-    // Cria o modal
-    const modal = document.createElement('div');
-    modal.id = 'ganhadoresModal';
-    modal.className = 'modal';
-    modal.innerHTML = html;
-    
-    // Adiciona o modal ao documento
-    document.body.appendChild(modal);
-    
-    // Mostra o modal
-    modal.style.display = 'block';
-}
-
-function fecharModalGanhadores() {
-    const modal = document.getElementById('ganhadoresModal');
-    if (modal) {
-        modal.remove();
-    }
-}
-
-// Adicione estes estilos ao seu CSS
+    number.addEventListener('mouseout', function() {
+        this.style.transform = 'scale(1)';
+    });
+});
 </script>
 
-<?php
-$content = ob_get_clean();
-require_once 'includes/layout.php';
-?>
-
-<!-- Scripts movidos para depois do layout -->
-<script>
-let numerosSelecionados = [];
-let dezenasPremiar = 0;
-
-function abrirModalResultado(jogoId, qtdDezenas) {
-    numerosSelecionados = [];
-    dezenasPremiar = qtdDezenas;
-    
-    document.getElementById('jogoId').value = jogoId;
-    document.getElementById('resultadoModal').style.display = 'block';
-    
-    // Busca informações do jogo para gerar o grid
-    fetch(`ajax/buscar_jogo.php?id=${jogoId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const jogo = data.data;
-                gerarGridNumeros(jogo.total_numeros);
-                
-                // Atualiza o texto do modal para incluir a informação
-                document.querySelector('.modal-header h2').innerHTML = 
-                    `Adicionar Resultado <small>(Selecione ${dezenasPremiar} números)</small>`;
-                
-                // Inicializa o contador
-                atualizarContador();
-            } else {
-                alert('Erro ao carregar informações do jogo');
-            }
-        });
-}
-
-function gerarGridNumeros(totalNumeros) {
-    const grid = document.getElementById('numerosGrid');
-    grid.innerHTML = '';
-    
-    for (let i = 1; i <= totalNumeros; i++) {
-        const numero = document.createElement('div');
-        numero.className = 'number-select';
-        numero.textContent = String(i).padStart(2, '0');
-        numero.onclick = () => toggleNumero(numero);
-        grid.appendChild(numero);
-    }
-}
-
-function toggleNumero(elemento) {
-    const numero = parseInt(elemento.textContent);
-    const index = numerosSelecionados.indexOf(numero);
-    
-    if (index === -1) {
-        if (numerosSelecionados.length >= dezenasPremiar) {
-            alert(`Você só pode selecionar ${dezenasPremiar} números!`);
-            return;
-        }
-        elemento.classList.add('selected');
-        numerosSelecionados.push(numero);
-    } else {
-        elemento.classList.remove('selected');
-        numerosSelecionados.splice(index, 1);
-    }
-    
-    atualizarContador();
-}
-
-function atualizarContador() {
-    const contador = document.getElementById('numerosContador');
-    if (contador) {
-        contador.textContent = `${numerosSelecionados.length}/${dezenasPremiar} números selecionados`;
-    }
-}
-
-function fecharModalResultado() {
-    document.getElementById('resultadoModal').style.display = 'none';
-    document.getElementById('resultadoForm').reset();
-    numerosSelecionados = [];
-    dezenasPremiar = 0;
-    document.getElementById('numerosGrid').innerHTML = '';
-    document.querySelector('.modal-header h2').innerHTML = 'Adicionar Resultado';
-    atualizarContador();
-}
-
-function salvarResultado(event) {
-    event.preventDefault();
-    
-    if (numerosSelecionados.length !== dezenasPremiar) {
-        alert(`Você precisa selecionar exatamente ${dezenasPremiar} números!`);
-        return;
-    }
-    
-    const dados = {
-        jogo_id: document.getElementById('jogoId').value,
-        numeros: numerosSelecionados,
-        data_sorteio: document.getElementById('dataSorteio').value
-    };
-    
-    fetch('ajax/salvar_resultado.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dados)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(`Resultado salvo com sucesso!\nGanhadores: ${data.ganhadores}\nPrêmio Total: R$ ${data.premio_total}`);
-            window.location.reload();
-        } else {
-            alert(data.message || 'Erro ao salvar resultado');
-        }
-    })
-    .catch(error => {
-        alert('Erro ao salvar: ' + error.message);
-    });
-}
-
-// Fechar modal quando clicar fora
-window.onclick = function(event) {
-    if (event.target == document.getElementById('resultadoModal')) {
-        fecharModalResultado();
-    }
-}
-</script> 
+<?php require_once 'includes/layout.php'; ?> 

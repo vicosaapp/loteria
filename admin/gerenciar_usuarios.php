@@ -1,6 +1,12 @@
 <?php
+// No início do arquivo, após as configurações iniciais
+ini_set('memory_limit', '256M'); // Aumenta o limite de memória
+ini_set('max_execution_time', 300); // Aumenta o tempo máximo de execução
+set_time_limit(300); // Aumenta o tempo limite do script
+
 session_start();
 require_once '../config/database.php';
+require_once 'includes/header.php';
 
 // Verifica se é admin
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
@@ -8,155 +14,184 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
     exit();
 }
 
-// Define a página atual para o menu
-$currentPage = 'usuarios';
-
-// Buscar usuários
-try {
-    $stmt = $pdo->query("SELECT * FROM usuarios ORDER BY nome ASC");
-    $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch(PDOException $e) {
-    die("Erro ao buscar usuários: " . $e->getMessage());
+// Processar requisições AJAX
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    ob_clean(); // Limpa qualquer saída anterior
+    
+    try {
+        // Alternar status do usuário
+        if (isset($_POST['alternar_status']) && isset($_POST['usuario_id'])) {
+            $usuario_id = intval($_POST['usuario_id']);
+            
+            $stmt = $pdo->prepare("UPDATE usuarios SET status = NOT status WHERE id = ? AND tipo = 'usuario'");
+            if ($stmt->execute([$usuario_id])) {
+                echo json_encode(['success' => true, 'message' => 'Status alterado com sucesso!']);
+            } else {
+                throw new Exception('Erro ao alterar status do usuário');
+            }
+            exit;
+        }
+        
+        // Editar usuário
+        if (isset($_POST['editar_usuario'])) {
+            $id = intval($_POST['id']);
+            $nome = trim($_POST['nome']);
+            $email = trim($_POST['email']);
+            $whatsapp = trim($_POST['whatsapp']);
+            
+            if (empty($nome) || empty($email)) {
+                throw new Exception('Nome e email são obrigatórios');
+            }
+            
+            $stmt = $pdo->prepare("UPDATE usuarios SET nome = ?, email = ?, whatsapp = ? WHERE id = ? AND tipo = 'usuario'");
+            if ($stmt->execute([$nome, $email, $whatsapp, $id])) {
+                echo json_encode(['success' => true, 'message' => 'Usuário atualizado com sucesso!']);
+            } else {
+                throw new Exception('Erro ao atualizar usuário');
+            }
+            exit;
+        }
+        
+        // Excluir usuário
+        if (isset($_POST['excluir_usuario']) && isset($_POST['usuario_id'])) {
+            $usuario_id = intval($_POST['usuario_id']);
+            
+            $pdo->beginTransaction();
+            
+            $stmt = $pdo->prepare("DELETE FROM usuarios WHERE id = ? AND tipo = 'usuario'");
+            if ($stmt->execute([$usuario_id])) {
+                $pdo->commit();
+                echo json_encode(['success' => true, 'message' => 'Usuário excluído com sucesso!']);
+            } else {
+                throw new Exception('Erro ao excluir usuário');
+            }
+            exit;
+        }
+        
+    } catch (Exception $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
 }
 
+// Definir variáveis de busca e tipo
+$busca = isset($_GET['busca']) ? trim($_GET['busca']) : '';
+$tipo = 'usuario';
+
+// Configuração da paginação
+$pagina = isset($_GET['pagina']) ? max(1, intval($_GET['pagina'])) : 1;
+$itens_por_pagina = 50;
+$offset = ($pagina - 1) * $itens_por_pagina;
+
+// Construir a query base
+$sql = "SELECT u.*, r.nome as nome_revendedor 
+        FROM usuarios u 
+        LEFT JOIN usuarios r ON u.revendedor_id = r.id 
+        WHERE u.tipo = 'usuario'";
+$params = [];
+
+// Adicionar condições de busca
+if (!empty($busca)) {
+    $sql .= " AND (u.nome LIKE ? OR u.email LIKE ?)";
+    $params[] = "%{$busca}%";
+    $params[] = "%{$busca}%";
+}
+
+// Contar total de registros
+$stmt_count = $pdo->prepare(str_replace('u.*, r.nome as nome_revendedor', 'COUNT(*) as total', $sql));
+$stmt_count->execute($params);
+$total = $stmt_count->fetch(PDO::FETCH_ASSOC)['total'];
+
+// Adicionar ordenação e limite
+$sql .= " ORDER BY u.nome LIMIT {$itens_por_pagina} OFFSET {$offset}";
+
+// Executar query principal
+$stmt = $pdo->prepare($sql);
+$stmt->execute($params);
+$usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Calcular total de páginas
+$total_paginas = ceil($total / $itens_por_pagina);
+
+// Define constante para segurança
+define('ADMIN', true);
+
+// Define a página atual
+$currentPage = 'usuarios';
+
+// Carrega a view
 ob_start();
 ?>
 
-<div class="page-container">
-    <div class="page-header">
-        <h1><i class="fas fa-users"></i> Gerenciar Usuários</h1>
-        <p>Gerencie os usuários do sistema</p>
-    </div>
+<style>
+.container-fluid {
+    padding: 1.5rem !important;
+    padding-left: 15rem !important;
+    margin-left: 0 !important;
+}
 
-    <div class="dashboard-stats">
-        <div class="stat-card">
-            <div class="stat-icon">
-                <i class="fas fa-user text-success"></i>
+.sidebar {
+    margin-right: 0 !important;
+    border-right: 1px solid #e3e6f0;
+}
+
+.card {
+    border-radius: 0.35rem;
+    margin: 0 !important;
+}
+
+.card-body {
+    padding: 1rem !important;
+}
+
+/* Remove estilos anteriores que não são necessários */
+.admin-container,
+.main-content,
+#wrapper,
+#content-wrapper {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* Ajusta a largura da tabela */
+.table-responsive {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+</style>
+
+<!-- Modal de Edição -->
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" role="dialog" aria-labelledby="modalEditarUsuarioLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEditarUsuarioLabel">Editar Usuário</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
             </div>
-            <div class="stat-info">
-                <h3><?php echo count(array_filter($usuarios, function($u) { return $u['tipo'] === 'usuario'; })); ?></h3>
-                <p>Usuários</p>
-            </div>
-        </div>
-        
-        <div class="stat-card">
-            <div class="stat-icon">
-                <i class="fas fa-user-shield text-warning"></i>
-            </div>
-            <div class="stat-info">
-                <h3><?php echo count(array_filter($usuarios, function($u) { return $u['tipo'] === 'admin'; })); ?></h3>
-                <p>Administradores</p>
-            </div>
-        </div>
-        
-        <div class="stat-card">
-            <div class="stat-icon">
-                <i class="fas fa-users text-info"></i>
-            </div>
-            <div class="stat-info">
-                <h3><?php echo count($usuarios); ?></h3>
-                <p>Total de Usuários</p>
-            </div>
-        </div>
-    </div>
-
-    <div class="content-section">
-        <button onclick="abrirModalUsuario()" class="btn btn-primary mb-4 actions-bar">
-            <i class="fas fa-plus"></i> Novo Usuário
-        </button>
-
-        <div class="table-responsive">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Nome</th>
-                        <th>Email</th>
-                        <th>Telefone</th>
-                        <th>WhatsApp</th>
-                        <th>Tipo</th>
-                        <th>Cadastro</th>
-                        <th>Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach($usuarios as $usuario): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars($usuario['nome']); ?></td>
-                            <td><?php echo htmlspecialchars($usuario['email']); ?></td>
-                            <td><?php echo $usuario['telefone'] ? htmlspecialchars($usuario['telefone']) : '-'; ?></td>
-                            <td><?php echo $usuario['whatsapp'] ? htmlspecialchars($usuario['whatsapp']) : '-'; ?></td>
-                            <td>
-                                <span class="badge <?php echo $usuario['tipo'] === 'admin' ? 'badge-warning' : 'badge-success'; ?>">
-                                    <?php echo ucfirst($usuario['tipo']); ?>
-                                </span>
-                            </td>
-                            <td><?php echo date('d/m/Y', strtotime($usuario['created_at'])); ?></td>
-                            <td>
-                                <button onclick='editarUsuario(<?php echo json_encode($usuario); ?>)' class="btn btn-sm btn-outline">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <?php if($usuario['id'] != $_SESSION['usuario_id']): ?>
-                                    <button onclick="confirmarExclusao(<?php echo $usuario['id']; ?>)" class="btn btn-sm btn-danger">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                <?php endif; ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de Usuário -->
-<div id="usuarioModal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h2><i class="fas fa-user"></i> <span id="modalTitle">Novo Usuário</span></h2>
-            <button type="button" class="close" onclick="fecharModal()">&times;</button>
-        </div>
-        
-        <div class="modal-body">
-            <form id="usuarioForm" onsubmit="salvarUsuario(event)">
-                <input type="hidden" id="userId">
-                
-                <div class="form-group">
-                    <label>Nome</label>
-                    <input type="text" id="nome" class="form-control" required>
+            <form id="formEditarUsuario">
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="editar_id">
+                    <div class="form-group">
+                        <label for="editar_nome">Nome</label>
+                        <input type="text" class="form-control" id="editar_nome" name="nome" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editar_email">Email</label>
+                        <input type="email" class="form-control" id="editar_email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="editar_whatsapp">WhatsApp</label>
+                        <input type="text" class="form-control" id="editar_whatsapp" name="whatsapp">
+                    </div>
                 </div>
-
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="email" class="form-control" required>
-                </div>
-
-                <div class="form-group">
-                    <label>Telefone</label>
-                    <input type="text" id="telefone" class="form-control">
-                </div>
-
-                <div class="form-group">
-                    <label>WhatsApp</label>
-                    <input type="text" id="whatsapp" class="form-control">
-                </div>
-
-                <div class="form-group">
-                    <label>Senha</label>
-                    <input type="password" id="senha" class="form-control">
-                    <small class="text-muted">Deixe em branco para manter a senha atual (ao editar)</small>
-                </div>
-
-                <div class="form-group">
-                    <label>Tipo</label>
-                    <select id="tipo" class="form-control" required>
-                        <option value="usuario">Usuário</option>
-                        <option value="admin">Administrador</option>
-                    </select>
-                </div>
-
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Salvar</button>
                 </div>
             </form>
@@ -164,330 +199,278 @@ ob_start();
     </div>
 </div>
 
-<style>
-/* Reset do scroll */
-html, body {
-    margin: 0;
-    padding: 0;
-    overflow-x: hidden;
-}
+<!-- HTML da página -->
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-users"></i> Gerenciar Usuários
+        </h1>
+        <button class="btn btn-primary" onclick="novoUsuario()">
+            <i class="fas fa-plus"></i> Novo Usuário
+        </button>
+    </div>
 
-/* Container principal ajustado */
-.page-container {
-    padding: 2px 0; /* Remove padding lateral */
-    margin-left: 20px; /* Ajusta margem do menu lateral */
-    width: 134%;
-    min-height: calc(100vh - 10px);
-    overflow-x: hidden;
-}
-
-/* Header da página */
-.page-header {
-    margin: 0 0 30px 0; /* Remove todas as margens */
-}
-
-.page-header h1 {
-    font-size: 24px;
-    color: #333;
-    margin-bottom: 5px;
-}
-
-.page-header p {
-    color: #666;
-    margin: 0;
-}
-
-/* Cards de estatísticas */
-.dashboard-stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    margin: 0 0 30px 0; /* Remove todas as margens */
-}
-
-.stat-card {
-    background: white;
-    padding: 20px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-
-.stat-icon {
-    font-size: 24px;
-}
-
-.text-success { color: #28a745; }
-.text-warning { color: #ffc107; }
-.text-info { color: #17a2b8; }
-
-.stat-info h3 {
-    margin: 0;
-    font-size: 24px;
-}
-
-.stat-info p {
-    margin: 5px 0 0;
-    color: #666;
-}
-
-.btn-primary {
-    background: #007bff;
-    color: white;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 5px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.table-responsive {
-    background: white;
-    margin: 20px 0; /* Mantém apenas margem vertical */
-    overflow-x: auto;
-}
-
-.table {
-    width: 100%;
-    min-width: 800px; /* Largura mínima para garantir legibilidade */
-}
-
-.table th,
-.table td {
-    padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid #eee;
-}
-
-.table th {
-    background: #f8f9fa;
-    color: #333;
-    font-weight: 600;
-}
-
-.table tr:hover {
-    background: #f8f9fa;
-}
-
-.badge {
-    padding: 4px 12px;
-    border-radius: 15px;
-    font-size: 12px;
-}
-
-.badge.admin {
-    background: #fff3cd;
-    color: #856404;
-}
-
-.badge.usuario {
-    background: #d4edda;
-    color: #155724;
-}
-
-.btn-sm {
-    padding: 4px 8px;
-    font-size: 12px;
-}
-
-/* Botão novo usuário */
-.actions-bar {
-    margin: 0; /* Remove todas as margens */
-}
-
-/* Ajustes responsivos */
-@media (max-width: 768px) {
-    .page-container {
-        margin-left: 0;
-        width: 100%;
-    }
-}
-
-/* Ajuste para scrollbar */
-@media screen and (min-width: 768px) {
-    /* Quando há scrollbar vertical */
-    body {
-        padding-right: 0;
-    }
-    
-    /* Previne salto de layout quando abre modal */
-    .modal-open {
-        padding-right: 17px; /* Largura da scrollbar */
-    }
-}
-
-/* Estilos do Modal */
-.modal {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 1000;
-}
-
-.modal-content {
-    background: white;
-    width: 90%;
-    max-width: 500px;
-    margin: 50px auto;
-    border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.modal-header {
-    padding: 20px;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 20px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.close {
-    background: none;
-    border: none;
-    font-size: 24px;
-    cursor: pointer;
-    color: #666;
-}
-
-.modal-body {
-    padding: 20px;
-}
-
-.form-group {
-    margin-bottom: 15px;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 5px;
-    color: #333;
-}
-
-.form-control {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-size: 14px;
-}
-
-.text-muted {
-    color: #666;
-    font-size: 12px;
-}
-
-.modal-footer {
-    padding: 20px;
-    border-top: 1px solid #eee;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}
-</style>
+    <div class="card shadow">
+        <div class="card-body px-2">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>WhatsApp</th>
+                            <th>Cadastro</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($usuarios as $usuario): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($usuario['nome']); ?></td>
+                            <td><?php echo htmlspecialchars($usuario['email']); ?></td>
+                            <td>
+                                <?php if (!empty($usuario['whatsapp'])): ?>
+                                    <a href="https://wa.me/<?php echo $usuario['whatsapp']; ?>" target="_blank" class="btn btn-success btn-sm">
+                                        <i class="fab fa-whatsapp"></i> WhatsApp
+                                    </a>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo isset($usuario['data_cadastro']) ? date('d/m/Y', strtotime($usuario['data_cadastro'])) : 'N/D'; ?></td>
+                            <td>
+                                <span class="badge badge-<?php echo isset($usuario['status']) && $usuario['status'] ? 'success' : 'danger'; ?>">
+                                    <?php echo isset($usuario['status']) && $usuario['status'] ? 'Ativo' : 'Bloqueado'; ?>
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-primary btn-sm btn-editar" 
+                                    data-id="<?php echo $usuario['id']; ?>"
+                                    data-nome="<?php echo htmlspecialchars($usuario['nome']); ?>"
+                                    data-email="<?php echo htmlspecialchars($usuario['email']); ?>"
+                                    data-whatsapp="<?php echo htmlspecialchars($usuario['whatsapp'] ?? ''); ?>">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-<?php echo isset($usuario['status']) && $usuario['status'] ? 'warning' : 'success'; ?> btn-sm btn-alternar-status" 
+                                    data-id="<?php echo $usuario['id']; ?>"
+                                    title="<?php echo isset($usuario['status']) && $usuario['status'] ? 'Bloquear' : 'Desbloquear'; ?>">
+                                    <i class="fas fa-<?php echo isset($usuario['status']) && $usuario['status'] ? 'lock' : 'unlock'; ?>"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm btn-excluir" data-id="<?php echo $usuario['id']; ?>">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                
+                <!-- Paginação -->
+                <div class="d-flex justify-content-center mt-4">
+                    <nav aria-label="Navegação de página">
+                        <ul class="pagination">
+                            <?php if($pagina > 1): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="?pagina=<?php echo $pagina - 1; ?>" aria-label="Anterior">
+                                        <span aria-hidden="true">&laquo;</span>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                            
+                            <?php for($i = 1; $i <= $total_paginas; $i++): ?>
+                                <li class="page-item <?php echo $i == $pagina ? 'active' : ''; ?>">
+                                    <a class="page-link" href="?pagina=<?php echo $i; ?>"><?php echo $i; ?></a>
+                                </li>
+                            <?php endfor; ?>
+                            
+                            <?php if($pagina < $total_paginas): ?>
+                                <li class="page-item">
+                                    <a class="page-link" href="?pagina=<?php echo $pagina + 1; ?>" aria-label="Próximo">
+                                        <span aria-hidden="true">&raquo;</span>
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script>
-let editandoId = null;
-
-function abrirModalUsuario() {
-    document.body.classList.add('modal-open');
-    editandoId = null;
-    document.getElementById('modalTitle').textContent = 'Novo Usuário';
-    document.getElementById('usuarioForm').reset();
-    document.getElementById('userId').value = '';
-    document.getElementById('senha').required = true;
-    document.getElementById('usuarioModal').style.display = 'block';
+// Função para editar usuário
+function editarUsuario(id, nome, email, whatsapp) {
+    document.getElementById('editar_id').value = id;
+    document.getElementById('editar_nome').value = nome;
+    document.getElementById('editar_email').value = email;
+    document.getElementById('editar_whatsapp').value = whatsapp || '';
+    $('#modalEditarUsuario').modal('show');
 }
 
-function editarUsuario(usuario) {
-    editandoId = usuario.id;
-    document.getElementById('modalTitle').textContent = 'Editar Usuário';
-    document.getElementById('userId').value = usuario.id;
-    document.getElementById('nome').value = usuario.nome;
-    document.getElementById('email').value = usuario.email;
-    document.getElementById('telefone').value = usuario.telefone || '';
-    document.getElementById('whatsapp').value = usuario.whatsapp || '';
-    document.getElementById('tipo').value = usuario.tipo;
-    document.getElementById('senha').required = false;
-    document.getElementById('usuarioModal').style.display = 'block';
-}
-
-function fecharModal() {
-    document.body.classList.remove('modal-open');
-    document.getElementById('usuarioModal').style.display = 'none';
-}
-
-function salvarUsuario(event) {
-    event.preventDefault();
+// Função para alternar status
+function alternarStatus(id) {
+    const botao = document.querySelector(`.btn-alternar-status[data-id="${id}"]`);
+    const estaAtivo = botao.classList.contains('btn-warning');
+    const mensagem = estaAtivo ? 'Deseja bloquear este usuário?' : 'Deseja desbloquear este usuário?';
     
-    const formData = {
-        id: document.getElementById('userId').value,
-        nome: document.getElementById('nome').value,
-        email: document.getElementById('email').value,
-        telefone: document.getElementById('telefone').value,
-        whatsapp: document.getElementById('whatsapp').value,
-        senha: document.getElementById('senha').value,
-        tipo: document.getElementById('tipo').value
-    };
-    
-    fetch('ajax/salvar_usuario.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-    })
-    .then(response => response.json())
-    .then(data => {
-        if(data.success) {
-            window.location.reload();
-        } else {
-            alert(data.message || 'Erro ao salvar usuário');
+    Swal.fire({
+        title: 'Confirmar alteração',
+        text: mensagem,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: estaAtivo ? '#d33' : '#28a745',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: estaAtivo ? 'Sim, bloquear!' : 'Sim, desbloquear!',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('gerenciar_usuarios.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `alternar_status=1&usuario_id=${id}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: data.message
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    throw new Error(data.message);
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: error.message
+                });
+            });
         }
     });
 }
 
-function confirmarExclusao(id) {
-    if(confirm('Tem certeza que deseja excluir este usuário?')) {
-        fetch('ajax/excluir_usuario.php', {
+// Função para excluir usuário
+function excluirUsuario(id) {
+    Swal.fire({
+        title: 'Confirmar exclusão',
+        text: 'Tem certeza que deseja excluir este usuário?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sim, excluir!',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('gerenciar_usuarios.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `excluir_usuario=1&usuario_id=${id}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: data.message
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    throw new Error(data.message);
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: error.message
+                });
+            });
+        }
+    });
+}
+
+// Quando o documento estiver carregado
+document.addEventListener('DOMContentLoaded', function() {
+    // Eventos para os botões de editar
+    document.querySelectorAll('.btn-editar').forEach(btn => {
+        btn.onclick = function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id');
+            const nome = this.getAttribute('data-nome');
+            const email = this.getAttribute('data-email');
+            const whatsapp = this.getAttribute('data-whatsapp');
+            editarUsuario(id, nome, email, whatsapp);
+        };
+    });
+
+    // Eventos para os botões de alternar status
+    document.querySelectorAll('.btn-alternar-status').forEach(btn => {
+        btn.onclick = function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id');
+            alternarStatus(id);
+        };
+    });
+
+    // Eventos para os botões de excluir
+    document.querySelectorAll('.btn-excluir').forEach(btn => {
+        btn.onclick = function(e) {
+            e.preventDefault();
+            const id = this.getAttribute('data-id');
+            excluirUsuario(id);
+        };
+    });
+
+    // Formulário de edição
+    document.getElementById('formEditarUsuario').onsubmit = function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const data = {};
+        formData.forEach((value, key) => data[key] = value);
+        
+        fetch('gerenciar_usuarios.php', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: JSON.stringify({id: id})
+            body: `editar_usuario=1&${new URLSearchParams(data).toString()}`
         })
         .then(response => response.json())
         .then(data => {
-            if(data.success) {
-                window.location.reload();
+            if (data.success) {
+                $('#modalEditarUsuario').modal('hide');
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sucesso!',
+                    text: data.message
+                }).then(() => {
+                    window.location.reload();
+                });
             } else {
-                alert(data.message || 'Erro ao excluir usuário');
+                throw new Error(data.message);
             }
+        })
+        .catch(error => {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: error.message
+            });
         });
-    }
-}
-
-// Ajusta quando clica fora do modal
-window.onclick = function(event) {
-    if (event.target == document.getElementById('usuarioModal')) {
-        fecharModal();
-    }
-}
+    };
+});
 </script>
 
 <?php

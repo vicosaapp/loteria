@@ -1,5 +1,7 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Verificar se o usuário está logado e é admin
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
@@ -76,7 +78,7 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'gerenciar_jogos.php' ? 'active' : ''; ?>" href="gerenciar_jogos.php">
-                <i class="fas fa-gamepad"></i> Gerenciar Jogos
+                <i class="fas fa-gamepad"></i> Gerenciar Jogosss
             </a>
             <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'resultados.php' ? 'active' : ''; ?>" href="gerenciar_resultados.php">
                 <i class="fas fa-trophy"></i> Resultados
