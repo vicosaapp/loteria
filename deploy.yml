@@ -1,0 +1,28 @@
+name: Deploy via FTP
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    
+    - name: FTP Deploy
+      uses: SamKirkland/FTP-Deploy-Action@4.3.0
+      with:
+        server: 2a02:4780:14:4dda::1
+        username: patto200
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: 21
+        server-dir: /www/wwwroot/lotominas.site/
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
+          deploy.php
+          deploy_log.txt
