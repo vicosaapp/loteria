@@ -4,34 +4,51 @@ Este é o repositório do sistema de loteria online, incluindo o site web e a AP
 
 ## Configuração do Deploy Automático
 
-Este projeto está configurado para deploy automático usando webhooks do GitHub. Quando você faz um push para a branch principal, as alterações são automaticamente implantadas no servidor.
+Este projeto está configurado para fazer deploy automático para o servidor sempre que houver um push para o branch `main` no GitHub.
 
-### Passos para Configurar o Deploy Automático
+### Configuração do GitHub Actions
 
-1. **Configurar o Repositório no GitHub**
-   - Crie um repositório no GitHub
-   - Adicione o código do projeto ao repositório
-   - Faça o primeiro push para a branch principal
+1. **Acesse seu repositório no GitHub**
+2. **Vá para "Settings" > "Secrets" > "Actions" > "New repository secret"**
+3. **Adicione um novo segredo**:
+   - Nome: `FTP_PASSWORD`
+   - Valor: `patto200`
+4. **Clique em "Add secret"**
 
-2. **Configurar o Servidor**
-   - Certifique-se de que o Git está instalado no servidor
-   - Clone o repositório no diretório web do APanel
-   - Configure as permissões corretas para os arquivos e diretórios
+### Como Funciona o Deploy
 
-3. **Configurar o Webhook no GitHub**
-   - Vá para as configurações do repositório no GitHub
-   - Clique em "Webhooks" > "Add webhook"
-   - Configure o webhook:
-     - Payload URL: `https://seu-dominio.com/deploy.php`
-     - Content type: `application/json`
-     - Secret: A mesma chave secreta definida no arquivo `deploy.php`
-     - Eventos: Selecione "Just the push event"
-     - Ative a opção "Active"
+1. Quando você faz um push para o branch `main`, o GitHub Actions é acionado automaticamente
+2. O GitHub Actions faz o checkout do código
+3. O GitHub Actions envia os arquivos para o servidor via FTP
+4. Os arquivos são atualizados no servidor
 
-4. **Testar o Deploy Automático**
-   - Faça uma pequena alteração no código
-   - Faça commit e push para o GitHub
-   - Verifique o arquivo `deploy_log.txt` no servidor para confirmar que o deploy foi bem-sucedido
+### Arquivos Excluídos do Deploy
+
+Os seguintes arquivos/diretórios não são enviados para o servidor:
+- Arquivos e diretórios do Git (`.git`, `.github`, etc.)
+- Diretório `node_modules`
+- Arquivo `deploy.php`
+- Arquivo `deploy_log.txt`
+
+### Fluxo de Trabalho de Desenvolvimento
+
+1. **Desenvolva localmente** no Cursor IDE
+2. **Faça commit e push para o GitHub**:
+   ```bash
+   git add .
+   git commit -m "Descrição das alterações"
+   git push origin main
+   ```
+3. **O GitHub Actions fará o deploy automaticamente**
+4. **Verifique o status do deploy** na aba "Actions" do GitHub
+
+### Solução de Problemas
+
+Se o deploy não estiver funcionando:
+1. Verifique se o segredo `FTP_PASSWORD` está configurado corretamente
+2. Verifique os logs na aba "Actions" do GitHub
+3. Verifique se o servidor FTP está aceitando conexões
+4. Verifique se o caminho remoto está correto
 
 ## Estrutura do Projeto
 
