@@ -1,4 +1,4 @@
-name: Test FTP Deploy
+name: Deploy via SFTP
 
 on:
   workflow_dispatch:  # Permite execução manual
@@ -16,16 +16,14 @@ jobs:
         echo "This is a test file created at $(date)" > test_file.txt
         ls -la
     
-    - name: FTP Deploy Test
-      uses: SamKirkland/FTP-Deploy-Action@4.3.0
+    - name: SFTP Deploy
+      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
       with:
-        server: 2a02:4780:14:4dda::1
+        server: lotominas.site
         username: patto200
         password: ${{ secrets.FTP_PASSWORD }}
-        port: 21
-        server-dir: /www/wwwroot/lotominas.site/
-        log-level: verbose
-        protocol: ftp
-        local-dir: ./
-        include: |
-          test_file.txt 
+        port: 22  # Porta SSH padrão
+        local_path: ./
+        remote_path: /www/wwwroot/lotominas.site/
+        sftp_only: true
+        delete_remote_files: false 
