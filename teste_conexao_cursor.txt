@@ -1,0 +1,4 @@
+Este arquivo foi criado pelo Cursor IDE para testar a conexão FTP com o servidor APanel.
+Data e hora: <?php echo date('Y-m-d H:i:s'); ?>
+
+Se você conseguir ver este arquivo no servidor, a conexão FTP está funcionando corretamente! 
