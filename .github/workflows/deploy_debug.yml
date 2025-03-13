@@ -1,0 +1,46 @@
+name: Deploy via FTP (Debug)
+
+on:
+  workflow_dispatch:  # Permite execução manual
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    
+    - name: Display FTP connection info (without password)
+      run: |
+        echo "FTP Server: 217.196.61.30"
+        echo "FTP Username: patto200"
+        echo "FTP Port: 21"
+        echo "Remote Path: /www/wwwroot/lotominas.site/"
+    
+    - name: Create test file
+      run: |
+        echo "<?php echo 'Test file created by GitHub Actions at $(date)'; ?>" > test_github_actions_$(date +%s).php
+        echo "Files to be uploaded:"
+        find . -type f -not -path "*/\.*" | head -n 20
+    
+    - name: FTP Deploy (Debug)
+      uses: SamKirkland/FTP-Deploy-Action@4.3.0
+      with:
+        server: 217.196.61.30
+        username: patto200
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: 21
+        server-dir: /www/wwwroot/lotominas.site/
+        log-level: verbose
+        timeout: 120000
+        protocol: ftp
+        local-dir: ./
+        dangerous-clean-slate: false
+        dry-run: false  # Set to true to test without actually uploading
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
+          deploy.php
+          deploy_log.txt 
