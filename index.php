@@ -511,7 +511,7 @@ $cardColors = [
         <div class="container-fluid px-4">
             <div class="section-title">
                 <h2>Jogos em Destaques</h2>
-                <p>Escolha seu jogo favorito e comece a ganhar</p>
+                <p>Escolha seus jogos favoritos e comece a ganhar</p>
             </div>
             
             <div class="row">
