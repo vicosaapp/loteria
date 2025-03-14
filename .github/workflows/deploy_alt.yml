@@ -1,0 +1,63 @@
+name: Deploy Alternativo via FTP
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    
+    - name: Verificar ambiente
+      run: |
+        echo "Sistema: $(uname -a)"
+        echo "Diretório atual: $(pwd)"
+        echo "Conteúdo do diretório:"
+        ls -la
+    
+    - name: Testar conexão FTP (sem senha)
+      run: |
+        echo "Testando conexão FTP..."
+        echo "Servidor: 217.196.61.30"
+        echo "Usuário: patto200"
+        echo "Porta: 21"
+        echo "Caminho remoto: /www/wwwroot/lotominas.site/"
+        
+        # Criar arquivo de teste
+        echo "<?php echo 'Arquivo de teste criado pelo GitHub Actions em ' . date('Y-m-d H:i:s'); ?>" > teste_github_actions_alt.php
+        
+        # Listar arquivos a serem enviados
+        echo "Arquivos a serem enviados:"
+        find . -type f -name "*.php" | head -n 10
+    
+    - name: Deploy via FTP (Alternativo)
+      uses: SamKirkland/FTP-Deploy-Action@4.3.0
+      with:
+        server: 217.196.61.30
+        username: patto200
+        password: ${{ secrets.FTP_PASSWORD }}
+        port: 21
+        server-dir: /www/wwwroot/lotominas.site/
+        log-level: verbose
+        timeout: 120000
+        protocol: ftp
+        local-dir: ./
+        dangerous-clean-slate: false
+        dry-run: false
+        exclude: |
+          **/.git*
+          **/.git*/**
+          **/node_modules/**
+          deploy.php
+          deploy_log.txt
+    
+    - name: Verificar resultado
+      if: always()
+      run: |
+        echo "Deploy concluído com status: ${{ job.status }}"
+        echo "Data e hora: $(date)" 
