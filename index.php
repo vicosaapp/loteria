@@ -510,7 +510,7 @@ $cardColors = [
     <section class="py-5">
         <div class="container-fluid px-4">
             <div class="section-title">
-                <h2>Jogos em Destaques</h2>
+                <h2>Jogos em Destaque</h2>
                 <p>Escolha seus jogos favoritos e comece a ganhar</p>
             </div>
             
