@@ -459,10 +459,10 @@ $cardColors = [
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/apostador">Área do Apostador</a>
+                        <a class="nav-link" href="/apostador/">Área do Apostador</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/revendedor">Revendedor</a>
+                        <a class="nav-link" href="/revendedor/">Revendedor</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin">Admin</a>
