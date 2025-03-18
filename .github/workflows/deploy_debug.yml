@@ -16,7 +16,7 @@ jobs:
         echo "FTP Server: 217.196.61.30"
         echo "FTP Username: patto200"
         echo "FTP Port: 21"
-        echo "Remote Path: /lotominas.site/"
+        echo "Remote Path: /www/wwwroot/lotominas.site/"
     
     - name: Create test file
       run: |
@@ -31,7 +31,7 @@ jobs:
         username: patto200
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
-        server-dir: /lotominas.site/
+        server-dir: /www/wwwroot/lotominas.site/
         log-level: verbose
         timeout: 120000
         protocol: ftp

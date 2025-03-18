@@ -26,7 +26,7 @@ jobs:
         echo "Servidor: 217.196.61.30"
         echo "Usuário: patto200"
         echo "Porta: 21"
-        echo "Caminho remoto: /lotominas.site/"
+        echo "Caminho remoto: /www/wwwroot/lotominas.site/"
         
         # Criar arquivo de teste
         echo "<?php echo 'Arquivo de teste criado pelo GitHub Actions em ' . date('Y-m-d H:i:s'); ?>" > teste_github_actions_alt.php
@@ -42,7 +42,7 @@ jobs:
         username: patto200
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
-        server-dir: /lotominas.site/
+        server-dir: /www/wwwroot/lotominas.site/
         log-level: verbose
         timeout: 120000
         protocol: ftp

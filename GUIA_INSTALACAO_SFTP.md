@@ -24,7 +24,7 @@ O arquivo `.vscode/sftp.json` já foi criado com as configurações corretas:
     "port": 21,
     "username": "patto200",
     "password": "patto200",
-    "remotePath": "/lotominas.site/",
+    "remotePath": "/www/wwwroot/lotominas.site/",
     "uploadOnSave": true,
     "ignore": [
         ".vscode",
