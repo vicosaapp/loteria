@@ -17,7 +17,7 @@ jobs:
         echo "FTP Server: 217.196.61.30"
         echo "FTP Username: patto200"
         echo "FTP Port: 21"
-        echo "Remote Path: /"
+        echo "Remote Path: /lotominas.site/"
     
     - name: FTP Deploy
       uses: SamKirkland/FTP-Deploy-Action@4.3.0
@@ -26,7 +26,7 @@ jobs:
         username: patto200
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
-        server-dir: /
+        server-dir: /lotominas.site/
         log-level: verbose
         timeout: 120000
         protocol: ftp
