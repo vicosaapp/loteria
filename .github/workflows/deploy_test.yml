@@ -23,7 +23,7 @@ jobs:
         username: patto200
         password: ${{ secrets.FTP_PASSWORD }}
         port: 21
-        server-dir: /lotominas.site/
+        server-dir: /
         log-level: verbose
         protocol: ftp
         local-dir: ./

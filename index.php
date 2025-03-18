@@ -74,7 +74,7 @@ $cardColors = [
         'accent' => '#F368E0'
     ],
     [
-        'gradient' => 'linear-gradient(135deg,rgb(243, 241, 247),rgb(250, 250, 250))', // Amarelo
+        'gradient' => 'linear-gradient(135deg,rgb(84, 23, 182),rgb(52, 13, 160))', // Amarelo
         'accent' => '#FFB142'
     ]
 ];
