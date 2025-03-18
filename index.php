@@ -50,7 +50,7 @@ try {
 // Array de cores para os cards
 $cardColors = [
     [
-        'gradient' => 'linear-gradient(135deg, #03a64d, #2d8e59)', // Verde Original
+        'gradient' => 'linear-gradient(135deg,rgb(3, 41, 166),rgb(8, 56, 158))', // Verde Original
         'accent' => '#03a64d'
     ],
     [
