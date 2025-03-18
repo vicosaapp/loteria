@@ -1,3 +1,52 @@
+<!-- Estilos -->
+<style>
+/* Estilo para as bolinhas de números */
+.numero-bolinha {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    background-color: #4e73df !important;
+    color: white !important;
+    border-radius: 50% !important;
+    margin: 2px !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    text-align: center !important;
+}
+
+.numeros-container {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 3px !important;
+    padding: 4px !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    min-width: 200px !important;
+}
+
+/* Ajustes na tabela */
+.table td {
+    vertical-align: middle !important;
+    padding: 0.75rem !important;
+}
+
+.table th {
+    white-space: nowrap !important;
+}
+
+/* Coluna de números mais larga */
+.table th:nth-child(4),
+.table td:nth-child(4) {
+    min-width: 280px !important;
+    max-width: 400px !important;
+}
+</style>
+
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Apostas</h1>
     <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaAposta">
@@ -76,8 +125,19 @@
                             <td><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></td>
                             <td><?php echo htmlspecialchars($aposta['nome_apostador']); ?></td>
                             <td><?php echo htmlspecialchars($aposta['nome_jogo']); ?></td>
-                            <td><?php echo htmlspecialchars($aposta['numeros']); ?></td>
-                            <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
+                            <td>
+                                <div class="numeros-container">
+                                    <?php 
+                                    $numeros = explode(',', $aposta['numeros']);
+                                    sort($numeros); // Ordena os números
+                                    foreach ($numeros as $numero) {
+                                        $num = str_pad(trim($numero), 2, '0', STR_PAD_LEFT);
+                                        echo "<span class='numero-bolinha'>$num</span>";
+                                    }
+                                    ?>
+                                </div>
+                            </td>
+                            <td class="fw-bold">R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
                             <td>
                                 <?php
                                 $statusClass = [

@@ -1,4 +1,9 @@
 <?php
+// Forçar exibição de erros
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 require_once '../config/database.php';
 session_start();
 
@@ -35,37 +40,65 @@ if (isset($_GET['status']) && !empty($_GET['status'])) {
     $params[] = $_GET['status'];
 }
 
-// Buscar apostas com filtros
-$stmt = $pdo->prepare("
-    SELECT 
-        a.*,
-        u.nome as nome_apostador,
-        j.nome as nome_jogo,
-        j.valor as valor_minimo,
-        j.premio as premio_maximo
-    FROM apostas a
-    JOIN usuarios u ON a.usuario_id = u.id
-    JOIN jogos j ON a.tipo_jogo_id = j.id
-    $where
-    ORDER BY a.created_at DESC
-");
-$stmt->execute($params);
-$apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    // Buscar apostas com filtros
+    $stmt = $pdo->prepare("
+        SELECT 
+            a.*,
+            u.nome as nome_apostador,
+            j.nome as nome_jogo,
+            j.valor as valor_minimo,
+            j.premio as premio_maximo
+        FROM apostas a
+        JOIN usuarios u ON a.usuario_id = u.id
+        JOIN jogos j ON a.tipo_jogo_id = j.id
+        $where
+        ORDER BY a.created_at DESC
+    ");
+    $stmt->execute($params);
+    $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Buscar clientes para o filtro
-$stmt = $pdo->prepare("
-    SELECT id, nome 
-    FROM usuarios 
-    WHERE revendedor_id = ? 
-    AND tipo = 'apostador' 
-    ORDER BY nome
-");
-$stmt->execute([$_SESSION['usuario_id']]);
-$clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Buscar clientes para o filtro
+    $stmt = $pdo->prepare("
+        SELECT id, nome 
+        FROM usuarios 
+        WHERE revendedor_id = ? 
+        AND tipo = 'apostador' 
+        ORDER BY nome
+    ");
+    $stmt->execute([$_SESSION['usuario_id']]);
+    $clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// Buscar jogos disponíveis
-$stmt = $pdo->query("SELECT * FROM jogos WHERE status = 1 ORDER BY nome");
-$jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Buscar jogos disponíveis
+    $stmt = $pdo->query("SELECT * FROM jogos WHERE status = 1 ORDER BY nome");
+    $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Buscar apostas importadas do revendedor atual
+    $stmt = $pdo->prepare("
+        SELECT 
+            ai.id,
+            ai.jogo_nome,
+            ai.numeros,
+            ai.valor_aposta,
+            ai.valor_premio as valor_premio,
+            ai.created_at,
+            u.nome as apostador_nome,
+            ai.whatsapp
+        FROM 
+            apostas_importadas ai
+            INNER JOIN usuarios u ON ai.usuario_id = u.id
+        WHERE 
+            ai.revendedor_id = ?
+        ORDER BY 
+            ai.created_at DESC
+    ");
+    $stmt->execute([$_SESSION['usuario_id']]);
+    $apostas_importadas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+} catch (Exception $e) {
+    error_log("Erro ao buscar apostas: " . $e->getMessage());
+    $error = "Erro ao carregar os dados. Por favor, tente novamente.";
+}
 
 // Define a página atual
 $currentPage = 'apostas';
@@ -154,9 +187,16 @@ ob_start();
                                 </td>
                                 <td><?php echo htmlspecialchars($aposta['nome_jogo']); ?></td>
                                 <td>
-                                    <span class="badge bg-light text-dark">
-                                        <?php echo htmlspecialchars($aposta['numeros']); ?>
-                                    </span>
+                                    <div class="numeros-container">
+                                        <?php 
+                                        $numeros = explode(',', $aposta['numeros']);
+                                        sort($numeros); // Ordena os números
+                                        foreach ($numeros as $numero) {
+                                            $num = str_pad(trim($numero), 2, '0', STR_PAD_LEFT);
+                                            echo "<span class='numero-bolinha'>$num</span>";
+                                        }
+                                        ?>
+                                    </div>
                                 </td>
                                 <td class="fw-bold">R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
                                 <td>
@@ -233,6 +273,98 @@ ob_start();
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-ticket-alt"></i> Apostas Importadas
+        </h1>
+        <a href="importar_apostas.php" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Nova Aposta
+        </a>
+    </div>
+
+    <?php if (isset($error)): ?>
+        <div class="alert alert-danger"><?php echo $error; ?></div>
+    <?php endif; ?>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <?php if (empty($apostas_importadas)): ?>
+                <div class="alert alert-info">
+                    Nenhuma aposta encontrada.
+                </div>
+            <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Apostador</th>
+                                <th>WhatsApp</th>
+                                <th>Jogo</th>
+                                <th>Números</th>
+                                <th>Valor Aposta</th>
+                                <th>Valor Prêmio</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($apostas_importadas as $aposta): ?>
+                                <tr>
+                                    <td><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></td>
+                                    <td><?php echo htmlspecialchars($aposta['apostador_nome']); ?></td>
+                                    <td>
+                                        <?php if ($aposta['whatsapp']): ?>
+                                            <a href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $aposta['whatsapp']); ?>" 
+                                               target="_blank" 
+                                               class="btn btn-sm btn-success">
+                                                <i class="fab fa-whatsapp"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?php echo htmlspecialchars($aposta['jogo_nome']); ?></td>
+                                    <td>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-info" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#modalNumeros<?php echo $aposta['id']; ?>">
+                                            Ver números
+                                        </button>
+                                    </td>
+                                    <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
+                                    <td>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></td>
+                                    <td>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-danger"
+                                                onclick="confirmarExclusao(<?php echo $aposta['id']; ?>)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                <!-- Modal para exibir os números -->
+                                <div class="modal fade" id="modalNumeros<?php echo $aposta['id']; ?>" tabindex="-1">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Números da Aposta</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <pre class="mb-0"><?php echo htmlspecialchars($aposta['numeros']); ?></pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -337,6 +469,12 @@ function cancelarAposta(id) {
         }
     });
 }
+
+function confirmarExclusao(id) {
+    if (confirm('Tem certeza que deseja excluir esta aposta?')) {
+        window.location.href = `excluir_aposta.php?id=${id}`;
+    }
+}
 </script>
 
 <style>
@@ -364,6 +502,52 @@ function cancelarAposta(id) {
     background: linear-gradient(135deg, var(--secondary-green), var(--primary-green)) !important;
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Estilo para as bolinhas de números */
+.numero-bolinha {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    background-color: #4e73df !important;
+    color: white !important;
+    border-radius: 50% !important;
+    margin: 2px !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    padding: 0 !important;
+    line-height: 1 !important;
+    text-align: center !important;
+}
+
+.numeros-container {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 3px !important;
+    padding: 4px !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    min-width: 200px !important;
+}
+
+/* Ajustes na tabela */
+.table td {
+    vertical-align: middle !important;
+    padding: 0.75rem !important;
+}
+
+.table th {
+    white-space: nowrap !important;
+}
+
+/* Coluna de números mais larga */
+.table th:nth-child(4),
+.table td:nth-child(4) {
+    min-width: 280px !important;
+    max-width: 400px !important;
 }
 </style>
 

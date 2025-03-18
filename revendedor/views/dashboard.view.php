@@ -24,9 +24,17 @@
     </div>
 </div>
 
+<?php
+// Forçar não cache
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+?>
+
 <!-- Cards de Estatísticas -->
 <div class="row mb-4">
-    <div class="col-xl-3 col-md-6 mb-4">
+    <!-- Card Total de Clientes -->
+    <div class="col-xl-4 col-md-6 mb-4">
         <div class="card h-100 card-stats">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -51,32 +59,8 @@
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card h-100 card-stats">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="d-flex flex-column">
-                        <div class="text-xs fw-bold text-uppercase mb-1 text-muted">
-                            Total em Apostas
-                        </div>
-                        <div class="h3 mb-0 fw-bold text-gray-800">
-                            R$ <?php echo number_format($stats['total_apostas_aprovadas'], 2, ',', '.'); ?>
-                        </div>
-                    </div>
-                    <div class="icon-circle bg-success">
-                        <i class="fas fa-dollar-sign text-white"></i>
-                    </div>
-                </div>
-                <div class="mt-3 small text-success">
-                    <span class="fw-bold">
-                        <i class="fas fa-coins"></i> Comissão: <?php echo $revendedor['comissao']; ?>%
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
+    <!-- Card Total de Apostas -->
+    <div class="col-xl-4 col-md-6 mb-4">
         <div class="card h-100 card-stats">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -101,7 +85,8 @@
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
+    <!-- Card Apostas Pendentes -->
+    <div class="col-xl-4 col-md-6 mb-4">
         <div class="card h-100 card-stats">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
@@ -168,6 +153,7 @@
                         <th>Data</th>
                         <th>Cliente</th>
                         <th>Jogo</th>
+                        <th>Números</th>
                         <th>Valor</th>
                         <th>Status</th>
                     </tr>
@@ -183,6 +169,16 @@
                                 <div class="fw-bold"><?php echo htmlspecialchars($aposta['nome_apostador']); ?></div>
                             </td>
                             <td><?php echo htmlspecialchars($aposta['nome_jogo']); ?></td>
+                            <td>
+                                <div class="numeros-container">
+                                    <?php 
+                                    $numeros = explode(',', $aposta['numeros']);
+                                    foreach ($numeros as $numero) {
+                                        echo '<span class="numero-bolinha">' . trim($numero) . '</span>';
+                                    }
+                                    ?>
+                                </div>
+                            </td>
                             <td class="fw-bold">R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
                             <td>
                                 <span class="badge bg-<?php 
@@ -262,5 +258,27 @@
 .badge {
     padding: 0.5rem 0.8rem;
     font-weight: 500;
+}
+
+/* Estilo para as bolinhas de números */
+.numero-bolinha {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    background-color: #4e73df;
+    color: white;
+    border-radius: 50%;
+    margin: 2px;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.numeros-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 400px;
 }
 </style> 

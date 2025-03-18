@@ -2,6 +2,11 @@
 require_once '../config/database.php';
 session_start();
 
+// Forçar não cache
+header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+header("Cache-Control: post-check=0, pre-check=0", false);
+header("Pragma: no-cache");
+
 // Verificar se é revendedor
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'revendedor') {
     header('Location: ../login.php');
@@ -22,7 +27,6 @@ $stmt = $pdo->prepare("
     SELECT 
         COALESCE(COUNT(DISTINCT u.id), 0) as total_clientes,
         COALESCE(COUNT(a.id), 0) as total_apostas,
-        COALESCE(SUM(CASE WHEN a.status = 'aprovada' THEN a.valor_aposta ELSE 0 END), 0) as total_apostas_aprovadas,
         COALESCE(SUM(CASE WHEN a.status = 'pendente' THEN 1 ELSE 0 END), 0) as apostas_pendentes
     FROM usuarios u 
     LEFT JOIN apostas a ON u.id = a.usuario_id
@@ -34,7 +38,6 @@ $stats = $stmt->fetch(PDO::FETCH_ASSOC);
 // Garantir que todos os valores estatísticos sejam numéricos
 $stats['total_clientes'] = (int)$stats['total_clientes'];
 $stats['total_apostas'] = (int)$stats['total_apostas'];
-$stats['total_apostas_aprovadas'] = (float)$stats['total_apostas_aprovadas'];
 $stats['apostas_pendentes'] = (int)$stats['apostas_pendentes'];
 
 // Buscar últimas apostas
