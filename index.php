@@ -70,7 +70,7 @@ $cardColors = [
         'accent' => '#22A6B3'
     ],
     [
-        'gradient' => 'linear-gradient(135deg, #F368E0, #FF9FF3)', // Rosa
+        'gradient' => 'linear-gradient(135deg,rgb(243, 229, 104), #FF9FF3)', // Rosa
         'accent' => '#F368E0'
     ],
     [
