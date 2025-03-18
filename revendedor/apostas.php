@@ -283,7 +283,7 @@ ob_start();
             <i class="fas fa-ticket-alt"></i> Apostas Importadas
         </h1>
         <a href="importar_apostas.php" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Nova Aposta
+            <i class="fas fa-plus"></i> Importar Aposta
         </a>
     </div>
 
