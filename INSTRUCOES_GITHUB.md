@@ -85,7 +85,7 @@ Se o GitHub Actions continuar falhando, você pode usar o upload direto via Curs
     "port": 21,
     "username": "patto200",
     "password": "patto200",
-    "remotePath": "/www/wwwroot/lotominas.site/",
+    "remotePath": "/lotominas.site/",
     "uploadOnSave": true,
     "ignore": [
         ".vscode",

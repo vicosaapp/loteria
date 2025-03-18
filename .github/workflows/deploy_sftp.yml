@@ -24,6 +24,6 @@ jobs:
         password: ${{ secrets.FTP_PASSWORD }}
         port: 22  # Porta SSH padrão
         local_path: ./
-        remote_path: /www/wwwroot/lotominas.site/
+        remote_path: /lotominas.site/
         sftp_only: true
         delete_remote_files: false 

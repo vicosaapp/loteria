@@ -16,7 +16,7 @@ Crie um arquivo chamado `.vscode/sftp.json` na raiz do seu projeto com o seguint
     "port": 21,
     "username": "patto200",
     "password": "patto200",
-    "remotePath": "/www/wwwroot/lotominas.site/",
+    "remotePath": "/lotominas.site/",
     "uploadOnSave": true,
     "ignore": [
         ".vscode",
@@ -89,7 +89,7 @@ Certifique-se de que as credenciais FTP estão corretas:
 - **Usuário**: patto200
 - **Senha**: patto200
 - **Porta**: 21
-- **Caminho remoto**: /www/wwwroot/lotominas.site/
+- **Caminho remoto**: /lotominas.site/
 
 ### 3.2. Verificar o caminho remoto
 
