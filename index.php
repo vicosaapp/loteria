@@ -66,7 +66,7 @@ $cardColors = [
         'accent' => '#FF9F43'
     ],
     [
-        'gradient' => 'linear-gradient(135deg, #22A6B3, #7ED6DF)', // Azul
+        'gradient' => 'linear-gradient(135deg,rgb(6, 102, 212),rgb(20, 90, 219))', // Azul
         'accent' => '#22A6B3'
     ],
     [
