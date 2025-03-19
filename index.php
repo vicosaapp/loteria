@@ -595,13 +595,13 @@ $cardColors = [
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="/apostador/">Área do Apostador</a>
+                        <a class="nav-link" href="/apostador/index.php">Área do Apostador</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/revendedor/">Revendedor</a>
+                        <a class="nav-link" href="/revendedor/index.php">Revendedor</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/admin">Admin</a>
+                        <a class="nav-link" href="/admin/index.php">Admin</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link btn btn-light text-primary ms-2 px-4" href="/cadastro">Cadastre-se</a>
