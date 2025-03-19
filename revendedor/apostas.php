@@ -119,45 +119,7 @@ ob_start();
     </div>
 
     <!-- Filtros -->
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <form method="GET" class="row g-3">
-                <div class="col-md-3">
-                    <label class="form-label">Data Início</label>
-                    <input type="date" name="data_inicio" class="form-control" value="<?php echo $_GET['data_inicio'] ?? ''; ?>">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Data Fim</label>
-                    <input type="date" name="data_fim" class="form-control" value="<?php echo $_GET['data_fim'] ?? ''; ?>">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Cliente</label>
-                    <select name="cliente" class="form-select">
-                        <option value="">Todos</option>
-                        <?php foreach ($clientes as $cliente): ?>
-                            <option value="<?php echo $cliente['id']; ?>" <?php echo (isset($_GET['cliente']) && $_GET['cliente'] == $cliente['id']) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($cliente['nome']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Status</label>
-                    <select name="status" class="form-select">
-                        <option value="">Todos</option>
-                        <option value="pendente" <?php echo (isset($_GET['status']) && $_GET['status'] == 'pendente') ? 'selected' : ''; ?>>Pendente</option>
-                        <option value="aprovada" <?php echo (isset($_GET['status']) && $_GET['status'] == 'aprovada') ? 'selected' : ''; ?>>Aprovada</option>
-                        <option value="rejeitada" <?php echo (isset($_GET['status']) && $_GET['status'] == 'rejeitada') ? 'selected' : ''; ?>>Rejeitada</option>
-                    </select>
-                </div>
-                <div class="col-md-1 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">
-                        <i class="fas fa-search"></i>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+ 
 
     <!-- Lista de Apostas -->
     <div class="card shadow-sm">
