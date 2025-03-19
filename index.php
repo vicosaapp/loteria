@@ -444,6 +444,142 @@ $cardColors = [
             color: #666;
             font-size: 1.1rem;
         }
+
+        /* Estilo para o modal de instalação */
+        .install-modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .install-modal-content {
+            position: relative;
+            background-color: #fff;
+            margin: 15% auto;
+            padding: 0;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        }
+
+        .install-modal-header {
+            padding: 15px 20px;
+            background-color: #2c3e50;
+            color: white;
+            border-radius: 15px 15px 0 0;
+        }
+
+        .install-modal-header h2 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+
+        .close-modal {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: -5px;
+        }
+
+        .install-modal-body {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .app-icon {
+            flex: 0 0 80px;
+            margin-right: 20px;
+        }
+
+        .app-icon img {
+            width: 80px;
+            height: 80px;
+            border-radius: 15px;
+        }
+
+        .app-info {
+            flex: 1;
+        }
+
+        .app-info p {
+            margin-top: 0;
+            font-weight: bold;
+        }
+
+        .app-info ul {
+            padding-left: 20px;
+            margin-bottom: 0;
+        }
+
+        .app-info ul li {
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .install-modal-footer {
+            padding: 15px 20px;
+            display: flex;
+            justify-content: flex-end;
+            border-top: 1px solid #eee;
+        }
+
+        .btn-install {
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .btn-dismiss {
+            background-color: #95a5a6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @media (max-width: 600px) {
+            .install-modal-content {
+                margin: 10% auto;
+                width: 95%;
+            }
+
+            .install-modal-body {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .app-icon {
+                margin-right: 0;
+                margin-bottom: 15px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -636,6 +772,157 @@ $cardColors = [
                 crossFade: true
             }
         });
+    </script>
+
+    <!-- Modal para instalação do app -->
+    <div id="install-modal" class="install-modal">
+        <div class="install-modal-content">
+            <div class="install-modal-header">
+                <span class="close-modal">&times;</span>
+                <h2>Instalar o App Loteria</h2>
+            </div>
+            <div class="install-modal-body">
+                <div class="app-icon">
+                    <img src="/assets/images/icon-192x192.png" alt="Logo Loteria">
+                </div>
+                <div class="app-info">
+                    <p>Instale o aplicativo para ter uma experiência melhor:</p>
+                    <ul>
+                        <li>Acesso rápido pela tela inicial</li>
+                        <li>Funciona offline</li>
+                        <li>Carregamento mais rápido</li>
+                        <li>Sem barra de navegação</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="install-modal-footer">
+                <button id="install-button" class="btn-install">Instalar Agora</button>
+                <button id="dismiss-button" class="btn-dismiss">Mais tarde</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Registrar o Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function(registration) {
+                    console.log('Service Worker registrado com sucesso:', registration.scope);
+                })
+                .catch(function(error) {
+                    console.log('Falha ao registrar o Service Worker:', error);
+                });
+        });
+    }
+
+    // Instalação do PWA
+    let deferredPrompt;
+    const installModal = document.getElementById('install-modal');
+    const installButton = document.getElementById('install-button');
+    const dismissButton = document.getElementById('dismiss-button');
+    const closeModalBtn = document.querySelector('.close-modal');
+
+    // Verificar se o app já está instalado
+    function isAppInstalled() {
+        return window.matchMedia('(display-mode: standalone)').matches || 
+               window.navigator.standalone === true || // Para iOS
+               localStorage.getItem('appInstalled') === 'true';
+    }
+
+    // Verificar se já foi mostrado recentemente
+    function wasPromptShownRecently() {
+        const lastPrompt = localStorage.getItem('lastInstallPrompt');
+        if (!lastPrompt) return false;
+        
+        const now = new Date().getTime();
+        const lastTime = parseInt(lastPrompt);
+        const dayInMs = 86400000; // 24 horas em ms
+        
+        return (now - lastTime) < (dayInMs * 3); // 3 dias
+    }
+
+    // Capturar o evento de instalação
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Não mostrar se já instalado ou visto recentemente
+        if (isAppInstalled() || wasPromptShownRecently()) {
+            return;
+        }
+        
+        // Mostrar o modal após 5 segundos
+        setTimeout(() => {
+            installModal.style.display = 'block';
+        }, 5000);
+    });
+
+    // Quando o usuário instala via navegador ou banner nativo
+    window.addEventListener('appinstalled', () => {
+        localStorage.setItem('appInstalled', 'true');
+        installModal.style.display = 'none';
+    });
+
+    // Botão de instalação
+    installButton.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+        
+        if (choiceResult.outcome === 'accepted') {
+            console.log('Usuário aceitou a instalação');
+            localStorage.setItem('appInstalled', 'true');
+        }
+        
+        deferredPrompt = null;
+        installModal.style.display = 'none';
+    });
+
+    // Botão de fechar
+    dismissButton.addEventListener('click', () => {
+        installModal.style.display = 'none';
+        localStorage.setItem('lastInstallPrompt', new Date().getTime().toString());
+    });
+
+    closeModalBtn.addEventListener('click', () => {
+        installModal.style.display = 'none';
+        localStorage.setItem('lastInstallPrompt', new Date().getTime().toString());
+    });
+
+    // Pull to refresh
+    let touchstartY = 0;
+    let touchendY = 0;
+    const refreshThreshold = 150; // pixels
+    let isPulling = false;
+
+    document.addEventListener('touchstart', function(e) {
+        touchstartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+        if (window.scrollY === 0) {
+            touchendY = e.touches[0].clientY;
+            const distance = touchendY - touchstartY;
+            
+            if (distance > 30 && !isPulling) {
+                isPulling = true;
+                // Mostrar indicador de pull-to-refresh
+            }
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', function() {
+        if (isPulling && (touchendY - touchstartY) > refreshThreshold) {
+            // Recarregar a página
+            window.location.reload();
+        }
+        
+        isPulling = false;
+        touchstartY = 0;
+        touchendY = 0;
+    }, { passive: true });
     </script>
 </body>
 </html>

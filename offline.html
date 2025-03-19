@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2c3e50">
+    <title>Sem conexão - Loteria</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --light-color: #ecf0f1;
+            --dark-color: #2c3e50;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--light-color);
+            color: #333;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .offline-container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .offline-icon {
+            font-size: 80px;
+            color: var(--secondary-color);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+        }
+        
+        p {
+            margin-bottom: 25px;
+            color: #666;
+        }
+        
+        .btn {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn:hover {
+            background: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+        }
+        
+        .spinner {
+            display: none;
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid rgba(0,0,0,0.1);
+            border-left-color: var(--secondary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .status-text {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <i class="fas fa-wifi-slash offline-icon"></i>
+        <h1>Você está offline</h1>
+        <p>Parece que você está sem conexão com a internet. Verifique sua conexão e tente novamente.</p>
+        <button id="retry-button" class="btn">
+            <i class="fas fa-sync-alt"></i> Tentar novamente
+        </button>
+        <div id="spinner" class="spinner"></div>
+        <p id="status-text" class="status-text">Verificando conexão...</p>
+    </div>
+
+    <script>
+        const retryButton = document.getElementById('retry-button');
+        const spinner = document.getElementById('spinner');
+        const statusText = document.getElementById('status-text');
+        
+        retryButton.addEventListener('click', function() {
+            // Mostrar spinner e mensagem
+            retryButton.style.display = 'none';
+            spinner.style.display = 'block';
+            statusText.style.display = 'block';
+            
+            // Verificar conexão e tentar reconectar
+            checkConnection();
+        });
+        
+        function checkConnection() {
+            // Verifica se o navegador está online
+            if (navigator.onLine) {
+                statusText.textContent = 'Redirecionando...';
+                // Redireciona para a página inicial
+                window.location.href = '/';
+            } else {
+                // Se ainda estiver offline, aguarde e tente novamente
+                statusText.textContent = 'Ainda sem conexão. Tentando novamente...';
+                setTimeout(checkConnection, 2000);
+            }
+        }
+        
+        // Se o usuário voltar a ter conexão, redirecionar automaticamente
+        window.addEventListener('online', function() {
+            window.location.href = '/';
+        });
+    </script>
+</body>
+</html> 

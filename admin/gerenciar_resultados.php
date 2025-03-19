@@ -131,10 +131,8 @@ $resultados_banco = [];
 try {
     // Se foi solicitada atualização manual
     if (isset($_POST['atualizar'])) {
-        echo "<!-- Iniciando atualização dos resultados -->";
         foreach ($api_urls as $jogo => $url) {
             try {
-                echo "<!-- Buscando resultado para $jogo na URL: $url -->";
                 $resultado = buscarResultado($url);
                 
                 if ($resultado) {
@@ -146,8 +144,6 @@ try {
                     $jogo_db = $stmt->fetch(PDO::FETCH_ASSOC);
                     
                     if ($jogo_db) {
-                        echo "<!-- Salvando resultado para jogo ID: " . $jogo_db['id'] . " -->";
-                        
                         // Prepara as dezenas na ordem correta
                         $dezenas = isset($resultado['listaDezenas']) ? $resultado['listaDezenas'] : [];
                         
@@ -171,14 +167,9 @@ try {
                             $dezenas,
                             $dados_resultado
                         );
-                    } else {
-                        echo "<!-- Jogo não encontrado no banco: $jogo -->";
                     }
-                } else {
-                    echo "<!-- Sem dados no resultado para $jogo -->";
                 }
             } catch (Exception $e) {
-                echo "<!-- Erro ao buscar $jogo: " . $e->getMessage() . " -->";
                 error_log("Erro ao buscar resultado do $jogo: " . $e->getMessage());
             }
         }
@@ -199,7 +190,20 @@ try {
             j.valor_acumulado,
             j.data_proximo_concurso,
             j.valor_estimado_proximo,
-            c.id as concurso_id
+            c.id as concurso_id,
+            (
+                SELECT COUNT(*)
+                FROM apostas_importadas ai
+                WHERE ai.jogo_nome = j.nome
+                AND ai.numeros = GROUP_CONCAT(DISTINCT ns.numero ORDER BY ns.numero ASC)
+            ) as total_ganhadores,
+            (
+                SELECT GROUP_CONCAT(DISTINCT CONCAT(u.nome, ':', ai.valor_premio) SEPARATOR '|')
+                FROM apostas_importadas ai
+                JOIN usuarios u ON ai.revendedor_id = u.id
+                WHERE ai.jogo_nome = j.nome
+                AND ai.numeros = GROUP_CONCAT(DISTINCT ns.numero ORDER BY ns.numero ASC)
+            ) as ganhadores_info
         FROM jogos j
         LEFT JOIN (
             SELECT c1.*
@@ -221,36 +225,21 @@ try {
         ORDER BY j.nome ASC
     ";
     
-    echo "<!-- Executando query: " . str_replace(['-->', '<!--'], '', $sql) . " -->";
-    
     $stmt = $pdo->query($sql);
     if ($stmt) {
         $resultados_banco = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        echo "<!-- Número de resultados encontrados: " . count($resultados_banco) . " -->";
-        foreach ($resultados_banco as $resultado) {
-            echo "<!-- 
-                Jogo: " . $resultado['nome'] . "
-                API: " . $resultado['identificador_api'] . "
-                Concurso: " . ($resultado['numero_concurso'] ?? 'N/A') . "
-                Dezenas: " . ($resultado['dezenas'] ?? 'N/A') . "
-            -->";
-        }
-    } else {
-        echo "<!-- Erro ao executar a query -->";
-        var_dump($pdo->errorInfo());
     }
     
 } catch (Exception $e) {
-    echo "<!-- Erro geral: " . $e->getMessage() . " -->";
     $mensagem = "Erro: " . $e->getMessage();
     $tipo_mensagem = "danger";
 }
 ?>
 
-<div class="container-fluid">
+<div class="container-fluid py-4">
     <div class="page-header">
         <div class="header-content">
-            <h1><i class="fas fa-trophy"></i> Resultados dos Jogos</h1>
+            <h1><i class="fas fa-trophy"></i> Resultados Oficiais</h1>
             <p>Resultados oficiais das Loterias Caixa</p>
         </div>
         <form method="post" class="d-inline">
@@ -262,14 +251,22 @@ try {
     </div>
 
     <?php if ($mensagem): ?>
-        <div class="alert alert-<?php echo $tipo_mensagem; ?>" role="alert">
+        <div class="alert alert-<?php echo $tipo_mensagem; ?> alert-dismissible fade show" role="alert">
             <?php echo $mensagem; ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php endif; ?>
+
+    <!-- Indicador de Pull to Refresh -->
+    <div class="refresh-indicator">
+        <div class="refresh-spinner"></div>
+        <span>Atualizando...</span>
+    </div>
 
     <div class="results-grid">
         <?php if (empty($resultados_banco)): ?>
             <div class="alert alert-info" role="alert">
+                <i class="fas fa-info-circle me-2"></i>
                 Nenhum resultado encontrado. Clique em "Atualizar Resultados" para buscar os últimos resultados.
             </div>
         <?php else: ?>
@@ -313,6 +310,35 @@ try {
                                         <span class="value"><?php echo formatarValor($resultado['valor_acumulado']); ?></span>
                                     </div>
                                 </div>
+
+                                <?php if (isset($resultado['total_ganhadores']) && $resultado['total_ganhadores'] > 0): ?>
+                                    <div class="ganhadores-info">
+                                        <h4>
+                                            <i class="fas fa-trophy me-2"></i>
+                                            Ganhadores deste Concurso
+                                        </h4>
+                                        <div class="ganhadores-lista">
+                                            <?php
+                                            $ganhadores = explode('|', $resultado['ganhadores_info']);
+                                            foreach ($ganhadores as $ganhador) {
+                                                list($nome, $premio) = explode(':', $ganhador);
+                                            ?>
+                                                <div class="ganhador-item">
+                                                    <div class="ganhador-nome">
+                                                        <i class="fas fa-user me-2"></i>
+                                                        <?php echo htmlspecialchars($nome); ?>
+                                                    </div>
+                                                    <div class="ganhador-premio">
+                                                        <?php echo formatarValor($premio); ?>
+                                                    </div>
+                                                </div>
+                                            <?php } ?>
+                                        </div>
+                                        <div class="total-ganhadores">
+                                            Total de Ganhadores: <?php echo $resultado['total_ganhadores']; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
                             <?php endif; ?>
 
                             <?php if (!empty($resultado['data_proximo_concurso'])): ?>
@@ -334,6 +360,7 @@ try {
                             <?php endif; ?>
                         <?php else: ?>
                             <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
                                 Nenhum resultado disponível para este jogo.
                             </div>
                         <?php endif; ?>
@@ -342,26 +369,87 @@ try {
             <?php endforeach; ?>
         <?php endif; ?>
     </div>
+    
+    <!-- Navegação móvel -->
+    <div class="mobile-nav">
+        <a href="../revendedor/index.php" class="mobile-nav-item">
+            <i class="fas fa-home"></i>
+            <span>Início</span>
+        </a>
+        <a href="../revendedor/apostas.php" class="mobile-nav-item">
+            <i class="fas fa-ticket-alt"></i>
+            <span>Apostas</span>
+        </a>
+        <a href="../admin/gerenciar_resultados.php" class="mobile-nav-item active">
+            <i class="fas fa-trophy"></i>
+            <span>Resultados</span>
+        </a>
+        <a href="../admin/relatorios.php" class="mobile-nav-item">
+            <i class="fas fa-chart-bar"></i>
+            <span>Relatórios</span>
+        </a>
+        <a href="../perfil.php" class="mobile-nav-item">
+            <i class="fas fa-user"></i>
+            <span>Perfil</span>
+        </a>
+    </div>
 </div>
 
 <style>
+:root {
+    --primary-color: #2c3e50;
+    --secondary-color: #3498db;
+    --success-color: #2ecc71;
+    --warning-color: #f1c40f;
+    --danger-color: #e74c3c;
+    --light-color: #ecf0f1;
+    --dark-color: #2c3e50;
+    --white-color: #ffffff;
+}
+
+/* Base styles */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #f5f7fa;
+    margin: 0;
+    padding-bottom: 60px; /* Espaço para menu móvel */
+}
+
 .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 30px;
-    padding: 20px;
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 25px;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    border-radius: 15px;
+    color: white;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.page-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+.page-header p {
+    margin: 5px 0 0;
+    opacity: 0.9;
 }
 
 .btn-update {
-    background: #00ff7f;
-    color: #000;
+    background: var(--success-color);
+    color: white;
     border: none;
     padding: 12px 25px;
-    border-radius: 8px;
+    border-radius: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -371,43 +459,43 @@ try {
 }
 
 .btn-update:hover {
-    background: #00ff95;
+    background: #27ae60;
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,255,127,0.4);
+    box-shadow: 0 4px 15px rgba(46,204,113,0.3);
 }
 
 .results-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 20px;
-    padding: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 25px;
+    padding: 10px;
 }
 
 .result-card {
     background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     overflow: hidden;
     transition: all 0.3s ease;
 }
 
 .result-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
 }
 
 /* Cores específicas para cada jogo */
-.result-card.megasena .card-header { background: #209869; }
-.result-card.lotofacil .card-header { background: #930089; }
-.result-card.quina .card-header { background: #260085; }
-.result-card.lotomania .card-header { background: #F78100; }
-.result-card.timemania .card-header { background: #00FF48; }
-.result-card.duplasena .card-header { background: #A61324; }
-.result-card.maismilionaria .card-header { background: #930089; }
-.result-card.diadesorte .card-header { background: #CB8E37; }
+.result-card.megasena .card-header { background: linear-gradient(135deg, #209869, #1a7d55); }
+.result-card.lotofacil .card-header { background: linear-gradient(135deg, #930089, #6d0066); }
+.result-card.quina .card-header { background: linear-gradient(135deg, #260085, #1c0061); }
+.result-card.lotomania .card-header { background: linear-gradient(135deg, #F78100, #c66800); }
+.result-card.timemania .card-header { background: linear-gradient(135deg, #00ff48, #00cc3a); }
+.result-card.duplasena .card-header { background: linear-gradient(135deg, #A61324, #8a0f1e); }
+.result-card.maismilionaria .card-header { background: linear-gradient(135deg, #930089, #6d0066); }
+.result-card.diadesorte .card-header { background: linear-gradient(135deg, #CB8E37, #a87429); }
 
 .card-header {
-    padding: 15px 20px;
+    padding: 20px;
     color: white;
     display: flex;
     justify-content: space-between;
@@ -422,17 +510,18 @@ try {
     margin: 0;
     font-size: 1.4rem;
     font-weight: 700;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
 }
 
 .concurso {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     opacity: 0.9;
     display: block;
     margin-top: 5px;
 }
 
 .data {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     opacity: 0.8;
 }
 
@@ -440,6 +529,9 @@ try {
     width: 60px;
     height: 60px;
     margin-left: 15px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    padding: 5px;
 }
 
 .jogo-logo {
@@ -449,20 +541,20 @@ try {
 }
 
 .card-body {
-    padding: 20px;
+    padding: 25px;
 }
 
 .numbers-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
     justify-content: center;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
 }
 
 .number {
-    width: 45px;
-    height: 45px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -470,9 +562,14 @@ try {
     font-weight: bold;
     font-size: 1.2rem;
     color: white;
-    background: #4e73df;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: transform 0.3s ease;
+    background: var(--primary-color);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.number:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.2);
 }
 
 /* Cores dos números para cada jogo */
@@ -486,10 +583,10 @@ try {
 .diadesorte .number { background: #CB8E37; }
 
 .premio-info {
-    margin-top: 20px;
-    padding: 15px;
-    background: #f8f9fc;
-    border-radius: 8px;
+    margin-top: 25px;
+    padding: 20px;
+    background: var(--light-color);
+    border-radius: 12px;
 }
 
 .acumulado {
@@ -498,27 +595,27 @@ try {
 
 .acumulado .label {
     display: block;
-    font-size: 0.9rem;
-    color: #666;
-    margin-bottom: 5px;
+    font-size: 0.95rem;
+    color: var(--dark-color);
+    margin-bottom: 8px;
 }
 
 .acumulado .value {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: bold;
-    color: #209869;
+    color: var(--success-color);
 }
 
 .proximo-sorteio {
-    margin-top: 20px;
+    margin-top: 25px;
     padding-top: 20px;
-    border-top: 1px solid #e3e6f0;
+    border-top: 1px solid var(--light-color);
 }
 
 .proximo-sorteio h4 {
-    font-size: 1rem;
-    color: #666;
-    margin-bottom: 10px;
+    font-size: 1.1rem;
+    color: var(--dark-color);
+    margin-bottom: 15px;
 }
 
 .proximo-sorteio .info {
@@ -526,13 +623,15 @@ try {
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 15px;
 }
 
 .proximo-sorteio .data {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
+    font-size: 1rem;
+    color: var(--dark-color);
 }
 
 .estimativa {
@@ -541,16 +640,176 @@ try {
 
 .estimativa .label {
     display: block;
-    font-size: 0.8rem;
-    color: #666;
+    font-size: 0.9rem;
+    color: var(--dark-color);
 }
 
 .estimativa .value {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     font-weight: bold;
-    color: #209869;
+    color: var(--success-color);
 }
 
+.alert {
+    border: none;
+    border-radius: 12px;
+    padding: 15px 20px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.alert-success {
+    background: linear-gradient(135deg, #2ecc71, #27ae60);
+    color: white;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+    color: white;
+}
+
+.ganhadores-info {
+    margin-top: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.ganhadores-info h4 {
+    color: var(--dark-color);
+    font-size: 1.1rem;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.ganhadores-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ganhador-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease;
+}
+
+.ganhador-item:hover {
+    transform: translateX(5px);
+}
+
+.ganhador-nome {
+    font-size: 0.95rem;
+    color: var(--dark-color);
+    display: flex;
+    align-items: center;
+}
+
+.ganhador-premio {
+    font-weight: bold;
+    color: var(--success-color);
+}
+
+.total-ganhadores {
+    margin-top: 15px;
+    text-align: center;
+    font-weight: bold;
+    color: var(--primary-color);
+    padding: 10px;
+    background: rgba(255,255,255,0.5);
+    border-radius: 8px;
+}
+
+/* Menu de navegação móvel */
+.mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--white-color);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    z-index: 1000;
+    height: 60px;
+    padding: 5px;
+}
+
+.mobile-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    text-decoration: none;
+    font-size: 0.8rem;
+    padding: 5px;
+    transition: all 0.3s ease;
+}
+
+.mobile-nav-item i {
+    font-size: 1.3rem;
+    margin-bottom: 4px;
+}
+
+.mobile-nav-item.active {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+.mobile-nav-item:active {
+    transform: scale(0.9);
+}
+
+/* Pull to refresh indicator */
+.refresh-indicator {
+    display: none;
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.9);
+    padding: 8px 15px;
+    border-radius: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    font-size: 0.8rem;
+    color: var(--dark-color);
+    z-index: 1100;
+}
+
+.refresh-indicator.visible {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.refresh-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--primary-color);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Media Queries para responsividade */
 @media (max-width: 768px) {
     .results-grid {
         grid-template-columns: 1fr;
@@ -558,7 +817,9 @@ try {
     
     .page-header {
         flex-direction: column;
-        gap: 15px;
+        gap: 20px;
+        text-align: center;
+        padding: 15px;
     }
     
     .btn-update {
@@ -575,14 +836,48 @@ try {
         text-align: left;
         width: 100%;
     }
+    
+    .number {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+    
+    .numbers-grid {
+        gap: 8px;
+    }
+    
+    .card-header {
+        padding: 15px;
+    }
+    
+    .card-body {
+        padding: 15px;
+    }
+    
+    .page-header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .ganhador-nome {
+        font-size: 0.85rem;
+        max-width: 170px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .ganhador-premio {
+        font-size: 0.85rem;
+    }
 }
 </style>
 
 <script>
-// Atualização automática a cada 30 minutos
+// Atualização automática a cada 1 minuto
 setInterval(function() {
     document.querySelector('button[name="atualizar"]').click();
-}, 1800000); // 30 minutos em milissegundos
+}, 60000);
 
 // Animação dos números
 document.querySelectorAll('.number').forEach(number => {
@@ -594,6 +889,76 @@ document.querySelectorAll('.number').forEach(number => {
         this.style.transform = 'scale(1)';
     });
 });
+
+// Efeito de loading ao atualizar
+document.querySelector('form').addEventListener('submit', function() {
+    const button = this.querySelector('button[name="atualizar"]');
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Atualizando...';
+    button.disabled = true;
+});
+
+// Pull to refresh (arraste para baixo para atualizar)
+let touchstartY = 0;
+let touchendY = 0;
+const refreshThreshold = 150; // pixels
+let isPulling = false;
+const refreshIndicator = document.querySelector('.refresh-indicator');
+
+document.addEventListener('touchstart', function(e) {
+    touchstartY = e.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+    if (window.scrollY === 0) {
+        touchendY = e.touches[0].clientY;
+        const distance = touchendY - touchstartY;
+        
+        if (distance > 30 && !isPulling) {
+            refreshIndicator.classList.add('visible');
+            isPulling = true;
+        }
+        
+        if (distance > refreshThreshold && isPulling) {
+            refreshIndicator.innerHTML = '<div class="refresh-spinner"></div><span>Solte para atualizar</span>';
+        }
+    }
+}, { passive: true });
+
+document.addEventListener('touchend', function() {
+    if (isPulling && (touchendY - touchstartY) > refreshThreshold) {
+        // Trigger refresh
+        document.querySelector('button[name="atualizar"]').click();
+    }
+    
+    isPulling = false;
+    refreshIndicator.classList.remove('visible');
+    touchstartY = 0;
+    touchendY = 0;
+}, { passive: true });
+
+// Adicionar Font Awesome se não estiver incluído
+if (!document.querySelector('link[href*="font-awesome"]')) {
+    const fontAwesome = document.createElement('link');
+    fontAwesome.rel = 'stylesheet';
+    fontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css';
+    document.head.appendChild(fontAwesome);
+}
+
+// Adicionar meta viewport se não estiver incluído
+if (!document.querySelector('meta[name="viewport"]')) {
+    const viewport = document.createElement('meta');
+    viewport.name = 'viewport';
+    viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.head.appendChild(viewport);
+}
+
+// Adicionar meta theme-color
+if (!document.querySelector('meta[name="theme-color"]')) {
+    const themeColor = document.createElement('meta');
+    themeColor.name = 'theme-color';
+    themeColor.content = '#2c3e50';
+    document.head.appendChild(themeColor);
+}
 </script>
 
 <?php require_once 'includes/layout.php'; ?> 
