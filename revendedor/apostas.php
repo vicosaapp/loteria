@@ -551,6 +551,20 @@ function confirmarExclusao(id) {
 }
 </style>
 
+<link rel="stylesheet" href="../assets/css/bootstrap.min.css">
+<link rel="stylesheet" href="../assets/css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+<!-- CSS responsivo para mobile -->
+<link rel="stylesheet" href="../assets/css/mobile.css">
+
+<script src="../assets/js/bootstrap.bundle.min.js"></script>
+<script src="../assets/js/jquery-3.6.0.min.js"></script>
+
+<!-- JavaScript para suporte mobile -->
+<script src="../assets/js/mobile.js"></script>
+</body>
+
 <?php
 $content = ob_get_clean();
 require_once 'includes/layout.php';

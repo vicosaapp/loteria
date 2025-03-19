@@ -20,6 +20,14 @@ if (isset($_SESSION['usuario_id']) && $_SESSION['tipo'] === 'revendedor') {
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     
+    <!-- Arquivos CSS do Bootstrap -->
+    <link rel="stylesheet" href="../assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- CSS responsivo para mobile -->
+    <link rel="stylesheet" href="../assets/css/mobile.css">
+
     <style>
         html, body {
             height: 100%;
@@ -185,6 +193,11 @@ if (isset($_SESSION['usuario_id']) && $_SESSION['tipo'] === 'revendedor') {
     </style>
 </head>
 <body>
+    <!-- Botão para mostrar/esconder a barra lateral no mobile -->
+    <button class="toggle-sidebar d-md-none">
+        <i class="fas fa-bars"></i>
+    </button>
+    
     <div class="login-container">
         <div class="login-header">
             <img src="../assets/img/logo.png" alt="LotoMinas" class="login-logo">
@@ -228,8 +241,37 @@ if (isset($_SESSION['usuario_id']) && $_SESSION['tipo'] === 'revendedor') {
         </form>
     </div>
 
+    <!-- Navegação móvel -->
+    <div class="mobile-nav">
+        <a href="index.php" class="mobile-nav-item active">
+            <i class="fas fa-home"></i>
+            <span>Dashboard</span>
+        </a>
+        <a href="apostas.php" class="mobile-nav-item">
+            <i class="fas fa-ticket-alt"></i>
+            <span>Apostas</span>
+        </a>
+        <a href="clientes.php" class="mobile-nav-item">
+            <i class="fas fa-users"></i>
+            <span>Clientes</span>
+        </a>
+        <a href="importar_apostas.php" class="mobile-nav-item">
+            <i class="fas fa-file-import"></i>
+            <span>Importar</span>
+        </a>
+        <a href="perfil.php" class="mobile-nav-item">
+            <i class="fas fa-user"></i>
+            <span>Perfil</span>
+        </a>
+    </div>
+
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="../assets/js/bootstrap.bundle.min.js"></script>
+    <script src="../assets/js/jquery-3.6.0.min.js"></script>
+    
+    <!-- JavaScript para suporte mobile -->
+    <script src="../assets/js/mobile.js"></script>
     <script>
         function togglePassword() {
             const senhaInput = document.getElementById('senha');
