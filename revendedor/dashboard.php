@@ -10,67 +10,165 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'revendedor') {
 
 // Buscar informações do dashboard
 try {
-    // Total de clientes
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM usuarios WHERE revendedor_id = ? AND tipo = 'apostador'");
-    $stmt->execute([$_SESSION['usuario_id']]);
-    $total_clientes = $stmt->fetchColumn();
+    // Inicializar variáveis com valores padrão
+    $total_clientes = 0;
+    $total_apostas = 0;
+    $total_comissoes = 0;
+    $apostas_pendentes = 0;
+    $apostas_recentes = [];
 
-    // Total de apostas
+    // Verificar se a sessão do revendedor está ativa
+    if (!isset($_SESSION['usuario_id']) || empty($_SESSION['usuario_id'])) {
+        throw new Exception("Sessão do revendedor não está ativa. Faça login novamente.");
+    }
+
+    // Verificar conexão com o banco de dados
+    $pdo->query("SELECT 1");
+
+    // Verificar se o revendedor existe
+    $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE id = ? AND tipo = 'revendedor'");
+    $stmt->execute([$_SESSION['usuario_id']]);
+    if (!$stmt->fetch()) {
+        throw new Exception("Revendedor não encontrado no sistema.");
+    }
+
+    // Total de clientes - consulta mais segura
     $stmt = $pdo->prepare("
         SELECT COUNT(*) 
-        FROM apostas a 
-        JOIN usuarios u ON a.usuario_id = u.id 
-        WHERE u.revendedor_id = ?
+        FROM usuarios 
+        WHERE revendedor_id = ? 
+        AND tipo = 'usuario'
     ");
     $stmt->execute([$_SESSION['usuario_id']]);
-    $total_apostas = $stmt->fetchColumn();
+    $total_clientes = $stmt->fetchColumn() ?: 0;
 
-    // Total de comissões
-    $stmt = $pdo->prepare("
-        SELECT COALESCE(SUM(valor_comissao), 0) 
-        FROM apostas a 
-        JOIN usuarios u ON a.usuario_id = u.id 
-        WHERE u.revendedor_id = ? AND a.status = 'aprovada'
-    ");
-    $stmt->execute([$_SESSION['usuario_id']]);
-    $total_comissoes = $stmt->fetchColumn();
+    // Verificar se a tabela apostas existe
+    $tables = $pdo->query("SHOW TABLES LIKE 'apostas'")->fetchAll();
+    if (count($tables) === 0) {
+        throw new Exception("Tabela 'apostas' não encontrada no banco de dados.");
+    }
 
-    // Apostas pendentes
+    // Total de apostas - consulta mais segura - ajustada para usar revendedor_id diretamente
     $stmt = $pdo->prepare("
         SELECT COUNT(*) 
-        FROM apostas a 
-        JOIN usuarios u ON a.usuario_id = u.id 
-        WHERE u.revendedor_id = ? AND a.status = 'pendente'
+        FROM apostas
+        WHERE revendedor_id = ?
     ");
     $stmt->execute([$_SESSION['usuario_id']]);
-    $apostas_pendentes = $stmt->fetchColumn();
+    $total_apostas = $stmt->fetchColumn() ?: 0;
 
-    // Apostas recentes
+    // Total de comissões - usar a tabela apostas_importadas também
+    // Como não há campo valor_comissao, calcular a partir da comissão do revendedor e valor das apostas
     $stmt = $pdo->prepare("
-        SELECT 
-            a.id, 
-            a.created_at, 
-            a.numeros, 
-            a.valor_aposta, 
-            a.status,
-            u.nome as cliente_nome,
-            j.nome as jogo_nome
-        FROM 
-            apostas a 
-            JOIN usuarios u ON a.usuario_id = u.id 
-            JOIN jogos j ON a.tipo_jogo_id = j.id
-        WHERE 
-            u.revendedor_id = ?
-        ORDER BY 
-            a.created_at DESC
-        LIMIT 5
+        SELECT COALESCE(SUM(a.valor_aposta * u.comissao / 100), 0) as comissao
+        FROM apostas a 
+        JOIN usuarios u ON u.id = ?
+        WHERE a.revendedor_id = ? 
+        AND a.status = 'aprovada'
+    ");
+    $stmt->execute([$_SESSION['usuario_id'], $_SESSION['usuario_id']]);
+    $comissao_apostas = $stmt->fetchColumn() ?: 0;
+    
+    // Pegar comissões das apostas importadas também
+    $stmt = $pdo->prepare("
+        SELECT COALESCE(SUM(a.valor_aposta * u.comissao / 100), 0) as comissao
+        FROM apostas_importadas a 
+        JOIN usuarios u ON u.id = ?
+        WHERE a.revendedor_id = ?
+    ");
+    $stmt->execute([$_SESSION['usuario_id'], $_SESSION['usuario_id']]);
+    $comissao_importadas = $stmt->fetchColumn() ?: 0;
+    
+    $total_comissoes = $comissao_apostas + $comissao_importadas;
+
+    // Apostas pendentes - consulta mais segura
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*) 
+        FROM apostas
+        WHERE revendedor_id = ? 
+        AND status = 'pendente'
     ");
     $stmt->execute([$_SESSION['usuario_id']]);
-    $apostas_recentes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $apostas_pendentes = $stmt->fetchColumn() ?: 0;
+
+    // Verificar se a tabela jogos existe
+    $tables = $pdo->query("SHOW TABLES LIKE 'jogos'")->fetchAll();
+    if (count($tables) === 0) {
+        throw new Exception("Tabela 'jogos' não encontrada no banco de dados.");
+    }
+
+    // Apostas recentes - consulta mais segura - incluir apostas padrão e importadas
+    try {
+        // Apostas regulares
+        $stmt = $pdo->prepare("
+            SELECT 
+                a.id, 
+                a.created_at, 
+                a.numeros, 
+                a.valor_aposta, 
+                a.status,
+                u.nome as cliente_nome,
+                j.nome as jogo_nome
+            FROM 
+                apostas a 
+                JOIN usuarios u ON a.usuario_id = u.id 
+                LEFT JOIN jogos j ON a.tipo_jogo_id = j.id
+            WHERE 
+                a.revendedor_id = ?
+            ORDER BY 
+                a.created_at DESC
+            LIMIT 5
+        ");
+        $stmt->execute([$_SESSION['usuario_id']]);
+        $apostas_regulares = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        
+        // Apostas importadas
+        $stmt = $pdo->prepare("
+            SELECT 
+                a.id, 
+                a.created_at, 
+                a.numeros, 
+                a.valor_aposta, 
+                'aprovada' as status,
+                u.nome as cliente_nome,
+                a.jogo_nome as jogo_nome
+            FROM 
+                apostas_importadas a 
+                JOIN usuarios u ON a.usuario_id = u.id 
+            WHERE 
+                a.revendedor_id = ?
+            ORDER BY 
+                a.created_at DESC
+            LIMIT 5
+        ");
+        $stmt->execute([$_SESSION['usuario_id']]);
+        $apostas_importadas = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        
+        // Combinar e ordenar por data
+        $apostas_recentes = array_merge($apostas_regulares, $apostas_importadas);
+        usort($apostas_recentes, function($a, $b) {
+            return strtotime($b['created_at']) - strtotime($a['created_at']);
+        });
+        
+        // Limitar a 5 resultados
+        $apostas_recentes = array_slice($apostas_recentes, 0, 5);
+    } catch (Exception $e) {
+        // Se houver erro na consulta de apostas recentes, apenas registre e continue
+        error_log("Erro nas apostas recentes: " . $e->getMessage());
+        $apostas_recentes = [];
+    }
 
 } catch (Exception $e) {
-    error_log("Erro no dashboard: " . $e->getMessage());
-    $error = "Erro ao carregar dados do dashboard. Por favor, tente novamente mais tarde.";
+    // Log detalhado do erro
+    error_log("Erro no dashboard [Detalhado]: " . $e->getMessage() . " - Trace: " . $e->getTraceAsString());
+    $error = "Erro ao carregar dados do dashboard: " . $e->getMessage();
+    
+    // Garantir que todas as variáveis tenham valores padrão em caso de erro
+    $total_clientes = 0;
+    $total_apostas = 0;
+    $total_comissoes = 0;
+    $apostas_pendentes = 0;
+    $apostas_recentes = [];
 }
 
 // Define a página atual
@@ -87,6 +185,15 @@ ob_start();
         <p class="welcome-message">Bem-vindo, <?php echo htmlspecialchars($_SESSION['nome'] ?? 'Revendedor'); ?>!</p>
     </div>
     
+    <!-- Exibir mensagem de erro, se existir -->
+    <?php if (isset($error) && !empty($error)): ?>
+        <div class="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <?php echo htmlspecialchars($error); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+        </div>
+    <?php endif; ?>
+    
     <div class="row">
         <!-- Cards de estatísticas adaptáveis para mobile -->
         <div class="col-lg-3 col-md-6 col-sm-12 mb-4">
@@ -95,7 +202,7 @@ ob_start();
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-uppercase">TOTAL DE CLIENTES</h6>
-                            <h2 class="stat-value"><?php echo $total_clientes; ?></h2>
+                            <h2 class="stat-value"><?php echo intval($total_clientes); ?></h2>
                         </div>
                         <div class="icon-container">
                             <i class="fas fa-users"></i>
@@ -112,7 +219,7 @@ ob_start();
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-uppercase">TOTAL DE APOSTAS</h6>
-                            <h2 class="stat-value"><?php echo $total_apostas; ?></h2>
+                            <h2 class="stat-value"><?php echo intval($total_apostas); ?></h2>
                         </div>
                         <div class="icon-container">
                             <i class="fas fa-ticket-alt"></i>
@@ -129,7 +236,7 @@ ob_start();
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-uppercase">COMISSÕES</h6>
-                            <h2 class="stat-value">R$ <?php echo number_format($total_comissoes, 2, ',', '.'); ?></h2>
+                            <h2 class="stat-value">R$ <?php echo number_format((float)$total_comissoes, 2, ',', '.'); ?></h2>
                         </div>
                         <div class="icon-container">
                             <i class="fas fa-dollar-sign"></i>
@@ -146,7 +253,7 @@ ob_start();
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="card-title text-uppercase">APOSTAS PENDENTES</h6>
-                            <h2 class="stat-value"><?php echo $apostas_pendentes; ?></h2>
+                            <h2 class="stat-value"><?php echo intval($apostas_pendentes); ?></h2>
                         </div>
                         <div class="icon-container">
                             <i class="fas fa-clock"></i>
@@ -161,75 +268,7 @@ ob_start();
     </div>
     
     <!-- Seção de apostas recentes -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Apostas Recentes</h5>
-                    <a href="apostas.php" class="btn btn-sm btn-primary">Ver Todas</a>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Cliente</th>
-                                    <th>Jogo</th>
-                                    <th>Números</th>
-                                    <th class="text-end">Valor</th>
-                                    <th class="text-center">Data</th>
-                                    <th class="text-center">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($apostas_recentes)): ?>
-                                    <tr>
-                                        <td colspan="6" class="text-center py-4">Nenhuma aposta recente encontrada.</td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php foreach ($apostas_recentes as $aposta): ?>
-                                        <tr>
-                                            <td><?php echo htmlspecialchars($aposta['cliente_nome'] ?? 'N/A'); ?></td>
-                                            <td><?php echo htmlspecialchars($aposta['jogo_nome'] ?? 'N/A'); ?></td>
-                                            <td>
-                                                <span class="numbers-container">
-                                                    <?php 
-                                                    $numeros = explode(',', $aposta['numeros'] ?? '');
-                                                    foreach ($numeros as $numero) {
-                                                        echo '<span class="numero-bolinha">' . str_pad(trim($numero), 2, '0', STR_PAD_LEFT) . '</span>';
-                                                    }
-                                                    ?>
-                                                </span>
-                                            </td>
-                                            <td class="text-end">
-                                                <strong>R$ <?php echo number_format(($aposta['valor_aposta'] ?? 0), 2, ',', '.'); ?></strong>
-                                            </td>
-                                            <td class="text-center">
-                                                <?php if (!empty($aposta['created_at'])): ?>
-                                                    <?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?>
-                                                <?php else: ?>
-                                                    N/A
-                                                <?php endif; ?>
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="badge bg-<?php 
-                                                    echo $aposta['status'] == 'aprovada' ? 'success' : 
-                                                        ($aposta['status'] == 'rejeitada' ? 'danger' : 'warning'); 
-                                                ?>">
-                                                    <?php echo ucfirst($aposta['status'] ?? ''); ?>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+
 
 <style>
     /* Estilos específicos do Dashboard */
