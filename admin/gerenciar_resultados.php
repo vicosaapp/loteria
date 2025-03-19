@@ -959,6 +959,4 @@ if (!document.querySelector('meta[name="theme-color"]')) {
     themeColor.content = '#2c3e50';
     document.head.appendChild(themeColor);
 }
-</script>
-
-<?php require_once 'includes/layout.php'; ?> 
+</script> 

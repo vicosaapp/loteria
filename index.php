@@ -925,6 +925,4 @@ $cardColors = [
     }, { passive: true });
     </script>
 </body>
-</html>
-
-<?php require_once 'includes/layout.php'; ?> 
+</html> 
