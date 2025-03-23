@@ -185,4 +185,181 @@ body {
     align-items: center;
     justify-content: center;
     transition: all 0.3s ease;
+}
+
+/* Estilos para a página de resultados */
+.results-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 25px;
+    padding: 10px;
+}
+
+.result-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.result-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+/* Cores específicas para cada jogo */
+.result-card.megasena .card-header { background: linear-gradient(135deg, #209869, #1a7d55); }
+.result-card.lotofacil .card-header { background: linear-gradient(135deg, #930089, #6d0066); }
+.result-card.quina .card-header { background: linear-gradient(135deg, #260085, #1c0061); }
+.result-card.lotomania .card-header { background: linear-gradient(135deg, #F78100, #c66800); }
+.result-card.timemania .card-header { background: linear-gradient(135deg, #00ff48, #00cc3a); }
+.result-card.duplasena .card-header { background: linear-gradient(135deg, #A61324, #8a0f1e); }
+.result-card.maismilionaria .card-header { background: linear-gradient(135deg, #930089, #6d0066); }
+.result-card.diadesorte .card-header { background: linear-gradient(135deg, #CB8E37, #a87429); }
+
+.result-card .card-header {
+    padding: 20px;
+    color: white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.result-card .card-header h3 {
+    margin: 0;
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+}
+
+.numbers-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.number {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: white;
+    background: var(--primary-blue);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.number:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+}
+
+.premio-info {
+    margin-top: 25px;
+    padding: 20px;
+    background: var(--light-gray);
+    border-radius: 12px;
+}
+
+.acumulado {
+    text-align: center;
+}
+
+.acumulado .label {
+    display: block;
+    font-size: 0.95rem;
+    color: var(--dark-gray);
+    margin-bottom: 8px;
+}
+
+.acumulado .value {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--success);
+}
+
+.proximo-sorteio {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid var(--light-gray);
+}
+
+.proximo-sorteio h4 {
+    font-size: 1.1rem;
+    color: var(--primary-blue);
+    margin-bottom: 15px;
+}
+
+.proximo-sorteio .info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.proximo-sorteio .data {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    color: var(--dark-gray);
+}
+
+.estimativa {
+    text-align: right;
+}
+
+.estimativa .label {
+    display: block;
+    font-size: 0.9rem;
+    color: var(--dark-gray);
+}
+
+.estimativa .value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--success);
+}
+
+/* Responsividade para a página de resultados */
+@media (max-width: 768px) {
+    .results-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .number {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+    
+    .numbers-grid {
+        gap: 8px;
+    }
+    
+    .result-card .card-header {
+        padding: 15px;
+    }
+    
+    .result-card .card-header h3 {
+        font-size: 1.2rem;
+    }
+    
+    .premio-info,
+    .proximo-sorteio {
+        padding: 15px;
+    }
+    
+    .acumulado .value,
+    .estimativa .value {
+        font-size: 1.1rem;
+    }
 } 

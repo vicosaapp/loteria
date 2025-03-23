@@ -75,7 +75,6 @@
                 <label class="form-label">Status</label>
                 <select name="status" class="form-select">
                     <option value="">Todos</option>
-                    <option value="pendente" <?php echo ($status == 'pendente') ? 'selected' : ''; ?>>Pendente</option>
                     <option value="aprovada" <?php echo ($status == 'aprovada') ? 'selected' : ''; ?>>Aprovada</option>
                     <option value="rejeitada" <?php echo ($status == 'rejeitada') ? 'selected' : ''; ?>>Rejeitada</option>
                 </select>
@@ -156,12 +155,6 @@
                                             onclick="verDetalhes(<?php echo $aposta['id']; ?>)">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <?php if ($aposta['status'] == 'pendente'): ?>
-                                        <button type="button" class="btn btn-warning btn-sm" 
-                                                onclick="solicitarAprovacao(<?php echo $aposta['id']; ?>)">
-                                            <i class="fas fa-clock"></i> Solicitar Aprovação
-                                        </button>
-                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>
@@ -231,39 +224,6 @@ function verDetalhes(id) {
 }
 
 function solicitarAprovacao(id) {
-    Swal.fire({
-        title: 'Solicitar Aprovação',
-        text: "Deseja solicitar a aprovação desta aposta ao administrador?",
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#3085d6',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Sim, solicitar!',
-        cancelButtonText: 'Cancelar'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch('ajax/solicitar_aprovacao.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ id: id })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire(
-                        'Solicitado!',
-                        'A solicitação de aprovação foi enviada com sucesso.',
-                        'success'
-                    ).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    Swal.fire('Erro!', data.message, 'error');
-                }
-            });
-        }
-    });
+    // Função removida, pois não é mais necessária
 }
 </script> 

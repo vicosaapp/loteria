@@ -22,6 +22,20 @@ try {
     $valor_aposta = filter_input(INPUT_POST, 'valor', FILTER_VALIDATE_FLOAT);
     $revendedor_id = $_SESSION['usuario_id'];
     
+    // Valor do prêmio 
+    $valor_premio = 0;
+    if (isset($_POST['premio']) && is_numeric($_POST['premio'])) {
+        $valor_premio = filter_input(INPUT_POST, 'premio', FILTER_VALIDATE_FLOAT);
+    } else {
+        // Buscar o valor do prêmio baseado no jogo
+        $stmt = $pdo->prepare("SELECT premio FROM jogos WHERE id = ?");
+        $stmt->execute([$jogo_id]);
+        $jogo = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($jogo) {
+            $valor_premio = $jogo['premio'];
+        }
+    }
+    
     // Validar dados
     if (!$cliente_id || !$jogo_id || !$numeros || !$valor_aposta) {
         throw new Exception('Dados inválidos');
@@ -41,17 +55,21 @@ try {
             usuario_id, 
             tipo_jogo_id, 
             numeros, 
-            valor_aposta, 
+            valor_aposta,
+            valor_premio,
             status,
-            created_at
-        ) VALUES (?, ?, ?, ?, 'pendente', NOW())
+            created_at,
+            revendedor_id
+        ) VALUES (?, ?, ?, ?, ?, 'aprovada', NOW(), ?)
     ");
     
     $result = $stmt->execute([
         $cliente_id,
         $jogo_id,
         $numeros,
-        $valor_aposta
+        $valor_aposta,
+        $valor_premio,
+        $revendedor_id
     ]);
     
     if (!$result) {

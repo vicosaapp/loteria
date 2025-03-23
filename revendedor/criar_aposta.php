@@ -23,6 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $numeros = htmlspecialchars($_POST['numeros'] ?? '', ENT_QUOTES, 'UTF-8');
         
         $valor_aposta = filter_input(INPUT_POST, 'valor_aposta', FILTER_VALIDATE_FLOAT);
+        $valor_premio = filter_input(INPUT_POST, 'premio', FILTER_VALIDATE_FLOAT) ?: 0;
         
         // Verificar se o cliente pertence ao revendedor
         $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE id = ? AND revendedor_id = ?");
@@ -39,16 +40,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 tipo_jogo_id, 
                 numeros, 
                 valor_aposta, 
+                valor_premio,
                 status, 
                 created_at
-            ) VALUES (?, ?, ?, ?, 'pendente', NOW())
+            ) VALUES (?, ?, ?, ?, ?, 'aprovada', NOW())
         ");
         
         $result = $stmt->execute([
             $cliente_id,
             $jogo_id,
             $numeros,
-            $valor_aposta
+            $valor_aposta,
+            $valor_premio
         ]);
         
         if (!$result) {
@@ -176,6 +179,9 @@ ob_start();
                         
                         <!-- Campo oculto para armazenar os números selecionados -->
                         <input type="hidden" name="numeros" id="numerosInput" required>
+                        
+                        <!-- Campo oculto para armazenar o valor do prêmio -->
+                        <input type="hidden" name="premio" id="premioInput">
                         
                         <!-- Grade com as bolinhas de números -->
                         <div class="numeros-grid mb-3" id="numerosGrid">
@@ -451,6 +457,7 @@ function atualizarPremiacao() {
     const valorSelect = document.getElementById('valor_aposta');
     const infoPremiacaoEl = document.getElementById('infoPremiacao');
     const valorPremiacaoEl = document.getElementById('valorPremiacao');
+    const premioInput = document.getElementById('premioInput');
     
     if (valorSelect.selectedIndex > 0) {
         const option = valorSelect.options[valorSelect.selectedIndex];
@@ -459,9 +466,13 @@ function atualizarPremiacao() {
         // Mostrar info de premiação
         infoPremiacaoEl.classList.remove('d-none');
         valorPremiacaoEl.textContent = `R$ ${parseFloat(premio).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+        
+        // Atualizar o campo oculto com o valor do prêmio
+        premioInput.value = premio;
     } else {
         // Esconder info de premiação
         infoPremiacaoEl.classList.add('d-none');
+        premioInput.value = '';
     }
 }
 

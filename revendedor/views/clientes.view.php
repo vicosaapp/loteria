@@ -258,7 +258,10 @@ document.getElementById('formCliente').addEventListener('submit', function(e) {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('Resposta do servidor:', data);
+        
         if (data.success) {
+            // Exibir mensagem de sucesso
             Swal.fire({
                 icon: 'success',
                 title: 'Sucesso!',
@@ -266,16 +269,30 @@ document.getElementById('formCliente').addEventListener('submit', function(e) {
                 showConfirmButton: false,
                 timer: 1500
             }).then(() => {
-                bootstrap.Modal.getInstance(document.getElementById('modalNovoCliente')).hide();
+                // Fechar o modal e recarregar a página
+                const modalEl = document.getElementById('modalNovoCliente');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
                 location.reload();
             });
         } else {
+            // Exibir mensagem de erro
             Swal.fire({
                 icon: 'error',
                 title: 'Erro!',
                 text: data.message || 'Erro ao salvar cliente'
             });
         }
+    })
+    .catch(error => {
+        console.error('Erro na requisição:', error);
+        
+        // Exibir mensagem de erro em caso de falha na requisição
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro!',
+            text: 'Ocorreu um erro na comunicação com o servidor. Tente novamente.'
+        });
     });
 });
 

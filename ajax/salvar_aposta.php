@@ -53,15 +53,17 @@ try {
             usuario_id, 
             tipo_jogo_id, 
             numeros, 
-            valor_aposta
-        ) VALUES (?, ?, ?, ?)
+            valor_aposta,
+            status
+        ) VALUES (?, ?, ?, ?, 'aprovada')
     ");
 
     $stmt->execute([
         $_SESSION['usuario_id'],
         $data['tipo_jogo_id'],
         $numeros,
-        $data['valor_aposta']
+        $data['valor_aposta'],
+        'aprovada'
     ]);
 
     echo json_encode([

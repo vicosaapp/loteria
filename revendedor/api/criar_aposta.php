@@ -153,7 +153,7 @@ try {
             numeros,
             status,
             data_criacao
-        ) VALUES (?, ?, ?, ?, ?, 'pendente', NOW())
+        ) VALUES (?, ?, ?, ?, ?, 'aprovada', NOW())
     ");
     $stmt->bind_param("iiids", $revendedor_id, $cliente_id, $jogo_id, $valor, $numeros);
     $stmt->execute();

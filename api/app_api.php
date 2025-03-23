@@ -168,7 +168,7 @@ switch($rota) {
                                 valor,
                                 status,
                                 created_at
-                            ) VALUES (?, ?, ?, ?, ?, 'ativa', NOW())
+                            ) VALUES (?, ?, ?, ?, ?, 'aprovada', NOW())
                         ");
                         
                         $stmt->execute([

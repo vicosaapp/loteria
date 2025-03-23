@@ -137,7 +137,7 @@ try {
           `numeros` varchar(255) NOT NULL,
           `valor_aposta` decimal(10,2) NOT NULL,
           `valor_comissao` decimal(10,2) DEFAULT '0.00',
-          `status` enum('pendente','aprovada','rejeitada') NOT NULL DEFAULT 'pendente',
+          `status` enum('pendente','aprovada','rejeitada') NOT NULL DEFAULT 'aprovada',
           `resultado` enum('aguardando','ganhou','perdeu') NOT NULL DEFAULT 'aguardando',
           `valor_premio` decimal(10,2) DEFAULT '0.00',
           `concurso` varchar(50) DEFAULT NULL,

@@ -48,7 +48,8 @@ try {
             u.nome as nome_apostador,
             j.nome as nome_jogo,
             j.valor as valor_minimo,
-            j.premio as premio_maximo
+            j.premio as premio_maximo,
+            COALESCE(a.valor_premio, 0) as valor_premio
         FROM apostas a
         JOIN usuarios u ON a.usuario_id = u.id
         JOIN jogos j ON a.tipo_jogo_id = j.id
@@ -111,7 +112,7 @@ ob_start();
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-ticket-alt"></i> Gerenciar Apostas
+            <i class="fas fa-ticket-alt"></i> Apostas Manuais
         </h1>
         <a href="criar_aposta.php" class="btn btn-success">
             <i class="fas fa-plus"></i> Nova Aposta
@@ -133,13 +134,13 @@ ob_start();
                             <th>Jogo</th>
                             <th>Números</th>
                             <th>Valor</th>
-                            <th>Status</th>
+                            <th>Prêmio</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($apostas as $aposta): ?>
-                            <tr>
+                            <tr class="<?php echo $aposta['valor_premio'] > 0 ? 'aposta-premiada' : ''; ?>">
                                 <td>
                                     <div class="small text-muted"><?php echo date('d/m/Y', strtotime($aposta['created_at'])); ?></div>
                                     <div class="small"><?php echo date('H:i', strtotime($aposta['created_at'])); ?></div>
@@ -161,29 +162,34 @@ ob_start();
                                     </div>
                                 </td>
                                 <td class="fw-bold">R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
-                                <td>
-                                    <span class="badge bg-<?php 
-                                        echo $aposta['status'] == 'aprovada' ? 'success' : 
-                                            ($aposta['status'] == 'rejeitada' ? 'danger' : 'warning'); 
-                                    ?>">
-                                        <?php echo ucfirst($aposta['status']); ?>
-                                    </span>
+                                <td class="<?php echo $aposta['valor_premio'] > 0 ? 'text-premio' : ''; ?>">
+                                    <?php if ($aposta['valor_premio'] > 0): ?>
+                                        <div class="premio-container">
+                                            <div>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></div>
+                                            <span class="badge-premio"><i class="fas fa-trophy"></i></span>
+                                        </div>
+                                    <?php else: ?>
+                                        R$ 0,00
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-info me-1" onclick="verDetalhes(<?php echo htmlspecialchars(json_encode($aposta)); ?>)">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <?php if ($aposta['status'] == 'pendente'): ?>
-                                        <button class="btn btn-sm btn-danger" onclick="cancelarAposta(<?php echo $aposta['id']; ?>)">
+                                        <button class="btn btn-sm btn-danger me-1" onclick="cancelarAposta(<?php echo $aposta['id']; ?>)">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     <?php endif; ?>
+                                    <button class="btn btn-sm btn-danger" onclick="excluirAposta(<?php echo $aposta['id']; ?>)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($apostas)): ?>
                             <tr>
-                                <td colspan="7" class="text-center py-4 text-muted">
+                                <td colspan="6" class="text-center py-4 text-muted">
                                     <i class="fas fa-info-circle"></i> Nenhuma aposta encontrada
                                 </td>
                             </tr>
@@ -229,8 +235,21 @@ ob_start();
                             <p id="detalheValor"></p>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Possível Prêmio</label>
-                            <p id="detalhePremio"></p>
+                            <label class="form-label fw-bold">Prêmio</label>
+                            <p id="detalhePremio" class="premio-valor"></p>
+                        </div>
+                        <div class="col-12" id="premioContainer" style="display: none;">
+                            <div class="alert alert-success">
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3">
+                                        <i class="fas fa-trophy fa-2x"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-1">Parabéns! Esta aposta foi premiada!</h5>
+                                        <p class="mb-0">O apostador ganhou <span id="detalhePremioValor" class="fw-bold"></span></p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -276,7 +295,7 @@ ob_start();
                         </thead>
                         <tbody>
                             <?php foreach ($apostas_importadas as $aposta): ?>
-                                <tr>
+                                <tr class="<?php echo $aposta['valor_premio'] > 0 ? 'aposta-premiada' : ''; ?>">
                                     <td><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></td>
                                     <td><?php echo htmlspecialchars($aposta['apostador_nome']); ?></td>
                                     <td>
@@ -298,7 +317,16 @@ ob_start();
                                         </button>
                                     </td>
                                     <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
-                                    <td>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></td>
+                                    <td class="<?php echo $aposta['valor_premio'] > 0 ? 'text-premio' : ''; ?>">
+                                        <?php if ($aposta['valor_premio'] > 0): ?>
+                                            <div class="premio-container">
+                                                <div>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></div>
+                                                <span class="badge-premio"><i class="fas fa-trophy"></i></span>
+                                            </div>
+                                        <?php else: ?>
+                                            R$ 0,00
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <button type="button" 
                                                 class="btn btn-sm btn-danger"
@@ -383,7 +411,18 @@ function verDetalhes(aposta) {
     `;
     document.getElementById('detalheNumeros').textContent = aposta.numeros;
     document.getElementById('detalheValor').textContent = `R$ ${parseFloat(aposta.valor_aposta).toFixed(2).replace('.', ',')}`;
-    document.getElementById('detalhePremio').textContent = `R$ ${parseFloat(aposta.premio_maximo).toFixed(2).replace('.', ',')}`;
+    
+    const valorPremio = parseFloat(aposta.valor_premio);
+    document.getElementById('detalhePremio').textContent = `R$ ${valorPremio.toFixed(2).replace('.', ',')}`;
+    
+    if (valorPremio > 0) {
+        document.getElementById('detalhePremio').classList.add('text-premio');
+        document.getElementById('detalhePremioValor').textContent = `R$ ${valorPremio.toFixed(2).replace('.', ',')}`;
+        document.getElementById('premioContainer').style.display = 'block';
+    } else {
+        document.getElementById('detalhePremio').classList.remove('text-premio');
+        document.getElementById('premioContainer').style.display = 'none';
+    }
     
     new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
 }
@@ -432,10 +471,91 @@ function cancelarAposta(id) {
     });
 }
 
+function excluirAposta(id) {
+    Swal.fire({
+        title: 'Confirmar exclusão',
+        text: 'Tem certeza que deseja excluir esta aposta?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sim, excluir!',
+        cancelButtonText: 'Não'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('ajax/excluir_aposta.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `id=${id}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: 'Aposta excluída com sucesso!'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    throw new Error(data.message || 'Erro ao excluir aposta');
+                }
+            })
+            .catch(error => {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: error.message
+                });
+            });
+        }
+    });
+}
+
 function confirmarExclusao(id) {
-    if (confirm('Tem certeza que deseja excluir esta aposta?')) {
-        window.location.href = `excluir_aposta.php?id=${id}`;
-    }
+    Swal.fire({
+        title: 'Confirmar exclusão',
+        text: "Tem certeza que deseja excluir esta aposta?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Sim, excluir!',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch('ajax/excluir_aposta_importada.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `id=${id}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Excluída!',
+                        text: 'Aposta excluída com sucesso!',
+                        showConfirmButton: false,
+                        timer: 1500
+                    }).then(() => {
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Erro!', data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                Swal.fire('Erro!', 'Ocorreu um erro ao excluir a aposta.', 'error');
+            });
+        }
+    });
 }
 </script>
 
@@ -510,6 +630,42 @@ function confirmarExclusao(id) {
 .table td:nth-child(4) {
     min-width: 280px !important;
     max-width: 400px !important;
+}
+
+/* Estilos para apostas premiadas */
+tr.aposta-premiada {
+    background-color: rgba(40, 167, 69, 0.05) !important;
+}
+
+tr.aposta-premiada:hover {
+    background-color: rgba(40, 167, 69, 0.1) !important;
+}
+
+.text-premio {
+    color:rgb(5, 90, 25) !important;
+    font-weight: bold !important;
+}
+
+.badge-premio {
+    position: absolute;
+    top: -5px;
+    right: -10px;
+    background-color: #28a745;
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.premio-container {
+    position: relative;
+    display: inline-block;
+    padding-right: 10px;
 }
 </style>
 

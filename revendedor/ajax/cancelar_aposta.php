@@ -22,19 +22,18 @@ try {
         throw new Exception('ID da aposta inválido');
     }
     
-    // Verificar se a aposta pertence ao revendedor e está pendente
+    // Verificar se a aposta pertence ao revendedor
     $stmt = $pdo->prepare("
         SELECT a.id 
         FROM apostas a
         JOIN usuarios u ON a.usuario_id = u.id
         WHERE a.id = ? 
-        AND u.revendedor_id = ? 
-        AND a.status = 'pendente'
+        AND u.revendedor_id = ?
     ");
     $stmt->execute([$aposta_id, $revendedor_id]);
     
     if (!$stmt->fetch()) {
-        throw new Exception('Aposta não encontrada, não pertence a este revendedor ou não está pendente');
+        throw new Exception('Aposta não encontrada ou não pertence a este revendedor');
     }
     
     // Cancelar aposta (mudar status para 'rejeitada')
