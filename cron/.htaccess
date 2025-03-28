@@ -1,0 +1,14 @@
+# Permitir acesso apenas via cron job
+Order Deny,Allow
+Deny from all
+Allow from 127.0.0.1
+
+# Configurar cache
+<IfModule mod_headers.c>
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+</IfModule>
+
+# Configurar timezone
+php_value date.timezone "America/Sao_Paulo" 

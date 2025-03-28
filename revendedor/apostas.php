@@ -126,74 +126,47 @@ ob_start();
     <div class="card shadow-sm">
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light">
+                <table class="table table-striped">
+                    <thead>
                         <tr>
-                            <th>Data/Hora</th>
+                            <th>Data</th>
                             <th>Cliente</th>
                             <th>Jogo</th>
                             <th>Números</th>
                             <th>Valor</th>
-                            <th>Prêmio</th>
+                            <th>Status</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($apostas as $aposta): ?>
-                            <tr class="<?php echo $aposta['valor_premio'] > 0 ? 'aposta-premiada' : ''; ?>">
+                            <tr>
+                                <td><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></td>
+                                <td><?php echo $aposta['nome_apostador']; ?></td>
+                                <td><?php echo $aposta['nome_jogo']; ?></td>
+                                <td><?php echo $aposta['numeros']; ?></td>
+                                <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
                                 <td>
-                                    <div class="small text-muted"><?php echo date('d/m/Y', strtotime($aposta['created_at'])); ?></div>
-                                    <div class="small"><?php echo date('H:i', strtotime($aposta['created_at'])); ?></div>
+                                    <span class="badge bg-<?php echo $aposta['status'] === 'aprovada' ? 'success' : 'warning'; ?>">
+                                        <?php echo ucfirst($aposta['status']); ?>
+                                    </span>
                                 </td>
                                 <td>
-                                    <div class="fw-bold"><?php echo htmlspecialchars($aposta['nome_apostador']); ?></div>
-                                </td>
-                                <td><?php echo htmlspecialchars($aposta['nome_jogo']); ?></td>
-                                <td>
-                                    <div class="numeros-container">
-                                        <?php 
-                                        $numeros = explode(',', $aposta['numeros']);
-                                        sort($numeros); // Ordena os números
-                                        foreach ($numeros as $numero) {
-                                            $num = str_pad(trim($numero), 2, '0', STR_PAD_LEFT);
-                                            echo "<span class='numero-bolinha'>$num</span>";
-                                        }
-                                        ?>
-                                    </div>
-                                </td>
-                                <td class="fw-bold">R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
-                                <td class="<?php echo $aposta['valor_premio'] > 0 ? 'text-premio' : ''; ?>">
-                                    <?php if ($aposta['valor_premio'] > 0): ?>
-                                        <div class="premio-container">
-                                            <div>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></div>
-                                            <span class="badge-premio"><i class="fas fa-trophy"></i></span>
-                                        </div>
-                                    <?php else: ?>
-                                        R$ 0,00
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-info me-1" onclick="verDetalhes(<?php echo htmlspecialchars(json_encode($aposta)); ?>)">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <?php if ($aposta['status'] == 'pendente'): ?>
-                                        <button class="btn btn-sm btn-danger me-1" onclick="cancelarAposta(<?php echo $aposta['id']; ?>)">
-                                            <i class="fas fa-times"></i>
+                                    <div class="btn-group">
+                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['nome_jogo']); ?>" 
+                                           class="btn btn-sm btn-info" 
+                                           target="_blank">
+                                            <i class="fas fa-file-alt"></i> Comprovante
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-danger" 
+                                                onclick="excluirAposta(<?php echo $aposta['id']; ?>)">
+                                            <i class="fas fa-trash"></i>
                                         </button>
-                                    <?php endif; ?>
-                                    <button class="btn btn-sm btn-danger" onclick="excluirAposta(<?php echo $aposta['id']; ?>)">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
-                        <?php if (empty($apostas)): ?>
-                            <tr>
-                                <td colspan="6" class="text-center py-4 text-muted">
-                                    <i class="fas fa-info-circle"></i> Nenhuma aposta encontrada
-                                </td>
-                            </tr>
-                        <?php endif; ?>
                     </tbody>
                 </table>
             </div>
@@ -472,47 +445,28 @@ function cancelarAposta(id) {
 }
 
 function excluirAposta(id) {
-    Swal.fire({
-        title: 'Confirmar exclusão',
-        text: 'Tem certeza que deseja excluir esta aposta?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Sim, excluir!',
-        cancelButtonText: 'Não'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            fetch('ajax/excluir_aposta.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `id=${id}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Sucesso!',
-                        text: 'Aposta excluída com sucesso!'
-                    }).then(() => {
-                        window.location.reload();
-                    });
-                } else {
-                    throw new Error(data.message || 'Erro ao excluir aposta');
-                }
-            })
-            .catch(error => {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Erro!',
-                    text: error.message
-                });
-            });
-        }
-    });
+    if (confirm('Tem certeza que deseja excluir esta aposta?')) {
+        fetch('../admin/ajax/excluir_aposta.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ id: id })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || 'Erro ao excluir a aposta');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao excluir a aposta');
+        });
+    }
 }
 
 function confirmarExclusao(id) {
@@ -666,6 +620,64 @@ tr.aposta-premiada:hover {
     position: relative;
     display: inline-block;
     padding-right: 10px;
+}
+
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+.btn-group {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.badge {
+    padding: 0.5em 0.75em;
+    font-weight: 500;
+}
+
+.bg-success {
+    background-color: #28a745 !important;
+}
+
+.bg-warning {
+    background-color: #ffc107 !important;
+}
+
+.btn-info {
+    color: #fff;
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+.btn-danger {
+    color: #fff;
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.btn:hover {
+    opacity: 0.9;
+}
+
+@media print {
+    .btn-group {
+        display: none;
+    }
 }
 </style>
 

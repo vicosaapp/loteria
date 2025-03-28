@@ -2,6 +2,7 @@
 
 function buscarResultadosAPI($jogo) {
     error_log("\n=== Iniciando busca de resultados para $jogo ===");
+    
     try {
         // Inicializar resultado com valores padrão
         $resultado = [
@@ -13,181 +14,129 @@ function buscarResultadosAPI($jogo) {
             'valorEstimadoProximoConcurso' => 0
         ];
 
-        // Tentar ler do cache primeiro
-        $cache_file = __DIR__ . "/../../cache/resultados_{$jogo}.json";
+        // Configurar diretório de cache
+        $cache_dir = __DIR__ . "/../../cache";
+        if (!file_exists($cache_dir)) {
+            mkdir($cache_dir, 0777, true);
+            chmod($cache_dir, 0777); // Garantir permissões após criar
+        }
+        
+        // Verificar permissões do cache
+        if (!is_writable($cache_dir)) {
+            chmod($cache_dir, 0777);
+            if (!is_writable($cache_dir)) {
+                error_log("ERRO: Diretório de cache sem permissão de escrita: $cache_dir");
+            }
+        }
+
+        // Nome do arquivo de cache
+        $cache_file = $cache_dir . "/resultados_{$jogo}.json";
         $cache_tempo = 300; // 5 minutos
         
+        // Tentar ler do cache
         if (file_exists($cache_file) && (time() - filemtime($cache_file) < $cache_tempo)) {
-            $cache = file_get_contents($cache_file);
-            if ($cache) {
-                $data = json_decode($cache, true);
+            $cache_data = @file_get_contents($cache_file);
+            if ($cache_data) {
+                $data = json_decode($cache_data, true);
                 if ($data && !empty($data['numero']) && !empty($data['dezenas'])) {
-                    error_log("Retornando dados do cache para $jogo");
                     return $data;
                 }
             }
         }
 
-        // Mapeamento de jogos para a API
-        $api_urls = [
-            'megasena' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/megasena',
-            'lotofacil' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil',
-            'quina' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/quina',
-            'lotomania' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/lotomania',
-            'timemania' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/timemania',
-            'duplasena' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/duplasena',
-            'maismilionaria' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/maismilionaria',
-            'diadesorte' => 'https://servicebus2.caixa.gov.br/portaldeloterias/api/diadesorte'
-        ];
-
-        // Verificar se o jogo existe
-        if (!isset($api_urls[$jogo])) {
-            error_log("Jogo não encontrado: " . $jogo);
-            error_log("Jogos disponíveis: " . implode(', ', array_keys($api_urls)));
-            return null;
+        // Primeiro tentar scraping do site da Caixa
+        $resultado_scraping = buscarResultadosSiteCaixa($jogo);
+        if ($resultado_scraping) {
+            // Salvar no cache
+            @file_put_contents($cache_file, json_encode($resultado_scraping));
+            return $resultado_scraping;
         }
 
-        $url = $api_urls[$jogo];
-        error_log("URL da API: $url");
-        
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_ENCODING, '');
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_MAXREDIRS, 10);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-        
-        $headers = [
-            'Accept: application/json',
-            'Content-Type: application/json',
-            'Origin: https://loterias.caixa.gov.br',
-            'Referer: https://loterias.caixa.gov.br/'
-        ];
-        
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        error_log("HTTP Status Code: " . $httpCode);
-        
-        if (curl_errno($ch)) {
-            error_log("Erro cURL: " . curl_error($ch));
-            curl_close($ch);
-            return null;
-        }
-        
-        curl_close($ch);
-        
-        if ($httpCode !== 200) {
-            error_log("Erro HTTP: " . $httpCode);
-            return null;
-        }
-        
-        $data = json_decode($response, true);
-        if (!$data) {
-            error_log("Erro ao decodificar JSON");
-            return null;
-        }
-        
-        // Mapear campos da API para o formato esperado
-        if (isset($data['numero'])) {
-            $resultado['numero'] = $data['numero'];
-        } elseif (isset($data['concurso'])) {
-            $resultado['numero'] = $data['concurso'];
-        }
-        
-        // Tratar data de apuração
-        $data_apuracao = null;
-        if (isset($data['dataApuracao'])) {
-            $data_apuracao = DateTime::createFromFormat('d/m/Y', $data['dataApuracao']);
-        } elseif (isset($data['data'])) {
-            $data_apuracao = DateTime::createFromFormat('d/m/Y', $data['data']);
-        }
-        
-        if ($data_apuracao) {
-            $resultado['dataApuracao'] = $data_apuracao->format('Y-m-d');
-        } else {
-            $resultado['dataApuracao'] = date('Y-m-d');
-        }
-        
-        // Tratar dezenas
-        if (isset($data['listaDezenas'])) {
-            $resultado['dezenas'] = array_map(function($n) {
-                return str_pad($n, 2, '0', STR_PAD_LEFT);
-            }, $data['listaDezenas']);
-        } elseif (isset($data['dezenas'])) {
-            $resultado['dezenas'] = array_map(function($n) {
-                return str_pad($n, 2, '0', STR_PAD_LEFT);
-            }, $data['dezenas']);
-        }
-        
-        // Tratar valor acumulado
-        if (isset($data['valorAcumulado'])) {
-            $valor = preg_replace('/[^\d,.]/', '', $data['valorAcumulado']);
-            $valor = str_replace('.', '', $valor);
-            $valor = str_replace(',', '.', $valor);
-            $resultado['valorAcumulado'] = floatval($valor);
-        } elseif (isset($data['acumulado'])) {
-            $valor = preg_replace('/[^\d,.]/', '', $data['acumulado']);
-            $valor = str_replace('.', '', $valor);
-            $valor = str_replace(',', '.', $valor);
-            $resultado['valorAcumulado'] = floatval($valor);
-        }
-        
-        // Tratar data do próximo concurso
-        $data_proximo = null;
-        if (isset($data['dataProximoConcurso'])) {
-            $data_proximo = DateTime::createFromFormat('d/m/Y', $data['dataProximoConcurso']);
-        } elseif (isset($data['dataProxConcurso'])) {
-            $data_proximo = DateTime::createFromFormat('d/m/Y', $data['dataProxConcurso']);
-        }
-        
-        if ($data_proximo) {
-            $resultado['dataProximoConcurso'] = $data_proximo->format('Y-m-d');
-        } else {
-            // Calcular próxima data baseado no dia atual
-            $hoje = new DateTime();
-            $proxima = clone $hoje;
-            while ($proxima->format('N') != 3 && $proxima->format('N') != 6) {
-                $proxima->modify('+1 day');
+        // Configurações do certificado SSL
+        $ssl_cert = __DIR__ . '/cacert.pem';
+        if (!file_exists($ssl_cert)) {
+            // Baixar certificado atualizado se não existir
+            $cert_url = 'https://curl.se/ca/cacert.pem';
+            $cert_content = @file_get_contents($cert_url);
+            if ($cert_content) {
+                @file_put_contents($ssl_cert, $cert_content);
             }
-            $resultado['dataProximoConcurso'] = $proxima->format('Y-m-d');
         }
-        
-        // Tratar valor estimado do próximo concurso
-        if (isset($data['valorEstimadoProximoConcurso'])) {
-            $valor = preg_replace('/[^\d,.]/', '', $data['valorEstimadoProximoConcurso']);
-            $valor = str_replace('.', '', $valor);
-            $valor = str_replace(',', '.', $valor);
-            $resultado['valorEstimadoProximoConcurso'] = floatval($valor);
-        } elseif (isset($data['valorEstimadoProxConcurso'])) {
-            $valor = preg_replace('/[^\d,.]/', '', $data['valorEstimadoProxConcurso']);
-            $valor = str_replace('.', '', $valor);
-            $valor = str_replace(',', '.', $valor);
-            $resultado['valorEstimadoProximoConcurso'] = floatval($valor);
+
+        // APIs alternativas com melhor compatibilidade SSL
+        $apis = [
+            [
+                'megasena' => 'https://loteriascaixa-api.herokuapp.com/api/mega-sena/latest',
+                'lotofacil' => 'https://loteriascaixa-api.herokuapp.com/api/lotofacil/latest',
+                'quina' => 'https://loteriascaixa-api.herokuapp.com/api/quina/latest',
+                'lotomania' => 'https://loteriascaixa-api.herokuapp.com/api/lotomania/latest',
+                'timemania' => 'https://loteriascaixa-api.herokuapp.com/api/timemania/latest',
+                'duplasena' => 'https://loteriascaixa-api.herokuapp.com/api/dupla-sena/latest',
+                'maismilionaria' => 'https://loteriascaixa-api.herokuapp.com/api/mais-milionaria/latest',
+                'diadesorte' => 'https://loteriascaixa-api.herokuapp.com/api/dia-de-sorte/latest'
+            ]
+        ];
+
+        foreach ($apis as $api) {
+            if (!isset($api[$jogo])) continue;
+            
+            $url = $api[$jogo];
+            $ch = curl_init();
+            
+            curl_setopt_array($ch, [
+                CURLOPT_URL => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => true, // Habilitar verificação SSL
+                CURLOPT_SSL_VERIFYHOST => 2, // Verificar hostname
+                CURLOPT_CAINFO => $ssl_cert, // Usar certificado local
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/122.0.0.0',
+                CURLOPT_ENCODING => 'gzip, deflate',
+                CURLOPT_HTTPHEADER => [
+                    'Accept: application/json',
+                    'Cache-Control: no-cache'
+                ]
+            ]);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            
+            if ($httpCode === 200 && $response) {
+                $data = json_decode($response, true);
+                if ($data) {
+                    // Mapear dados para o formato esperado
+                    if (isset($data['concurso'])) {
+                        $resultado['numero'] = $data['concurso'];
+                    }
+                    if (isset($data['data'])) {
+                        $data_obj = DateTime::createFromFormat('d/m/Y', $data['data']);
+                        if ($data_obj) {
+                            $resultado['dataApuracao'] = $data_obj->format('Y-m-d');
+                        }
+                    }
+                    if (isset($data['dezenas'])) {
+                        $resultado['dezenas'] = array_map(function($n) {
+                            return str_pad($n, 2, '0', STR_PAD_LEFT);
+                        }, $data['dezenas']);
+                    }
+                    
+                    // Salvar no cache se tiver dados válidos
+                    if (!empty($resultado['numero']) && !empty($resultado['dezenas'])) {
+                        @file_put_contents($cache_file, json_encode($resultado));
+                        curl_close($ch);
+                        return $resultado;
+                    }
+                }
+            }
+            curl_close($ch);
         }
-        
-        // Validar resultado
-        if (empty($resultado['numero']) || empty($resultado['dezenas'])) {
-            error_log("Dados incompletos recebidos da API");
-            return null;
-        }
-        
-        // Salvar no cache
-        if (!file_exists(__DIR__ . "/../../cache")) {
-            mkdir(__DIR__ . "/../../cache", 0777, true);
-        }
-        file_put_contents($cache_file, json_encode($resultado));
-        
-        error_log("Dados obtidos com sucesso: " . print_r($resultado, true));
-        return $resultado;
+
+        // Se chegou aqui, todas as tentativas falharam
+        error_log("ERRO: Não foi possível obter resultados para $jogo");
+        return null;
         
     } catch (Exception $e) {
-        error_log("Exceção ao buscar resultados: " . $e->getMessage());
-        error_log("Stack trace: " . $e->getTraceAsString());
+        error_log("ERRO: " . $e->getMessage());
         return null;
     }
 }
@@ -320,4 +269,184 @@ function verificarEstruturaBanco($pdo) {
         error_log("Erro ao verificar estrutura do banco: " . $e->getMessage());
         return ['success' => false, 'error' => $e->getMessage()];
     }
+}
+
+function buscarResultadosSiteCaixa($jogo) {
+    error_log("Tentando scraping do site da Caixa para $jogo");
+    
+    $mapeamento_urls = [
+        'megasena' => [
+            'https://www.caixa.gov.br/loterias/mega-sena/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Mega-Sena.aspx'
+        ],
+        'lotofacil' => [
+            'https://www.caixa.gov.br/loterias/lotofacil/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Lotofacil.aspx'
+        ],
+        'quina' => [
+            'https://www.caixa.gov.br/loterias/quina/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Quina.aspx'
+        ],
+        'lotomania' => [
+            'https://www.caixa.gov.br/loterias/lotomania/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Lotomania.aspx'
+        ],
+        'timemania' => [
+            'https://www.caixa.gov.br/loterias/timemania/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Timemania.aspx'
+        ],
+        'duplasena' => [
+            'https://www.caixa.gov.br/loterias/dupla-sena/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Dupla-Sena.aspx'
+        ],
+        'maismilionaria' => [
+            'https://www.caixa.gov.br/loterias/mais-milionaria/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Mais-Milionaria.aspx'
+        ],
+        'diadesorte' => [
+            'https://www.caixa.gov.br/loterias/dia-de-sorte/Paginas/default.aspx',
+            'https://loterias.caixa.gov.br/Paginas/Dia-de-Sorte.aspx'
+        ]
+    ];
+    
+    if (!isset($mapeamento_urls[$jogo])) {
+        error_log("Jogo não encontrado no mapeamento de URLs: $jogo");
+        return null;
+    }
+    
+    $resultado = null;
+    
+    // Tentar cada URL alternativa
+    foreach ($mapeamento_urls[$jogo] as $url) {
+        error_log("Tentando URL: $url");
+        
+        $ch = curl_init();
+        
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_ENCODING => 'gzip, deflate',
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'GET',
+            CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            CURLOPT_HTTPHEADER => [
+                'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language: pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding: gzip, deflate',
+                'Cache-Control: no-cache',
+                'Connection: keep-alive',
+                'Upgrade-Insecure-Requests: 1'
+            ]
+        ]);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        
+        error_log("HTTP Status Code (Scraping): " . $httpCode);
+        error_log("cURL Error (Scraping): " . $error);
+        
+        if ($httpCode === 200 && $response) {
+            // Inicializar resultado
+            $resultado = [
+                'numero' => '',
+                'dataApuracao' => date('Y-m-d'),
+                'dezenas' => [],
+                'valorAcumulado' => 0,
+                'dataProximoConcurso' => date('Y-m-d'),
+                'valorEstimadoProximoConcurso' => 0
+            ];
+            
+            // Usar DOMDocument para parse do HTML
+            libxml_use_internal_errors(true);
+            $dom = new DOMDocument();
+            $dom->loadHTML($response, LIBXML_NOERROR);
+            $xpath = new DOMXPath($dom);
+            
+            // Array de seletores para cada informação
+            $seletores = [
+                'numero' => [
+                    "//div[contains(@class, 'title-bar')]//h2[contains(text(), 'Concurso')]",
+                    "//div[contains(@class, 'resultado-loteria')]//span[contains(text(), 'Concurso')]",
+                    "//h2[contains(text(), 'Concurso')]",
+                    "//span[contains(text(), 'Concurso')]"
+                ],
+                'data' => [
+                    "//div[contains(@class, 'lottery-info')]//span[contains(@class, 'date')]",
+                    "//div[contains(@class, 'resultado-loteria')]//span[contains(@class, 'data')]",
+                    "//span[contains(@class, 'data-sorteio')]"
+                ],
+                'dezenas' => [
+                    "//ul[contains(@class, 'numbers')]/li",
+                    "//ul[contains(@class, 'dezenas-premiadas')]/li",
+                    "//div[contains(@class, 'resultado-loteria')]//li[contains(@class, 'ng-binding')]"
+                ]
+            ];
+            
+            // Tentar cada seletor para número do concurso
+            foreach ($seletores['numero'] as $seletor) {
+                $nodes = $xpath->query($seletor);
+                if ($nodes->length > 0) {
+                    if (preg_match('/Concurso\s*(?:n[º°]?)?\s*(\d+)/i', $nodes->item(0)->textContent, $matches)) {
+                        $resultado['numero'] = $matches[1];
+                        break;
+                    }
+                }
+            }
+            
+            // Tentar cada seletor para data
+            foreach ($seletores['data'] as $seletor) {
+                $nodes = $xpath->query($seletor);
+                if ($nodes->length > 0) {
+                    if (preg_match('/(\d{2}\/\d{2}\/\d{4})/', trim($nodes->item(0)->textContent), $matches)) {
+                        $data = DateTime::createFromFormat('d/m/Y', $matches[1]);
+                        if ($data) {
+                            $resultado['dataApuracao'] = $data->format('Y-m-d');
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Tentar cada seletor para dezenas
+            foreach ($seletores['dezenas'] as $seletor) {
+                $nodes = $xpath->query($seletor);
+                if ($nodes->length > 0) {
+                    foreach ($nodes as $node) {
+                        $dezena = trim($node->textContent);
+                        if (is_numeric($dezena)) {
+                            $resultado['dezenas'][] = str_pad($dezena, 2, '0', STR_PAD_LEFT);
+                        }
+                    }
+                    if (!empty($resultado['dezenas'])) {
+                        break;
+                    }
+                }
+            }
+            
+            // Se encontrou número do concurso e dezenas, considerar sucesso
+            if (!empty($resultado['numero']) && !empty($resultado['dezenas'])) {
+                error_log("Dados obtidos com sucesso da URL: $url");
+                curl_close($ch);
+                break;
+            }
+        }
+        
+        curl_close($ch);
+    }
+    
+    // Validar resultado final
+    if (!$resultado || empty($resultado['numero']) || empty($resultado['dezenas'])) {
+        error_log("Dados incompletos obtidos via scraping");
+        error_log("Resultado: " . print_r($resultado, true));
+        return null;
+    }
+    
+    error_log("Dados obtidos com sucesso via scraping: " . print_r($resultado, true));
+    return $resultado;
 } 
