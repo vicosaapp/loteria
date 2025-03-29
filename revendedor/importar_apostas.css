@@ -2,15 +2,51 @@
 
 @media (max-width: 768px) {
     .btn {
+        width: calc(100% - 20px);
+        margin: 5px 10px;
+    }
+
+    .input-group {
+        flex-wrap: wrap;
+    }
+
+    .input-group .form-control,
+    .input-group .input-group-text {
         width: 100%;
         margin-bottom: 10px;
     }
 
-    .form-control {
+    .form-group textarea {
         width: 100%;
     }
 
     .container {
         padding: 10px;
     }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .card-body {
+        padding: -15px;
+    }
+
+    .mt-3 {
+        margin-top: 30px;
+    }
+
+    .btn {
+        margin-bottom: 15px;
+    }
+
+    .card-body {
+        padding-bottom: 10px;
+    }
+}
+
+/* Ajuste do espaçamento vertical dos cartões */
+
+.card {
+    --bs-card-spacer-y: 3rem;
 } 
