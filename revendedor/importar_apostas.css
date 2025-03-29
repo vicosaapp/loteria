@@ -1,0 +1,16 @@
+/* Estilos para melhorar a responsividade dos botões */
+
+@media (max-width: 768px) {
+    .btn {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+    .form-control {
+        width: 100%;
+    }
+
+    .container {
+        padding: 10px;
+    }
+} 
