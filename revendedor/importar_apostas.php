@@ -384,7 +384,7 @@ ob_start();
                     <small class="form-text text-muted">Na primeira linha, coloque o nome do jogo. Nas linhas seguintes, coloque os números.</small>
                 </div>
 
-                <div class="mt-3">
+                <div class="mt-3 mb-5">
                     <button type="button" class="btn btn-secondary" id="btnVisualizar">
                         <i class="fas fa-eye"></i> Visualizar
                     </button>
