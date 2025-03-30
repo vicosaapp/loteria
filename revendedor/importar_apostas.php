@@ -414,7 +414,7 @@ ob_start();
 
 <!-- JavaScript -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="../assets/js/importar-apostas.js"></script>
+<script src="assets/js/importar-apostas.js"></script>
 
 <style>
 .numero-bolinha {

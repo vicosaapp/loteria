@@ -144,7 +144,14 @@ ob_start();
                                 <td><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></td>
                                 <td><?php echo $aposta['nome_apostador']; ?></td>
                                 <td><?php echo $aposta['nome_jogo']; ?></td>
-                                <td><?php echo $aposta['numeros']; ?></td>
+                                <td>
+                                    <button type="button" 
+                                           class="btn btn-sm btn-info" 
+                                           data-bs-toggle="modal" 
+                                           data-bs-target="#modalNumerosManuais<?php echo $aposta['id']; ?>">
+                                        Ver números
+                                    </button>
+                                </td>
                                 <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
                                 <td>
                                     <span class="badge bg-<?php echo $aposta['status'] === 'aprovada' ? 'success' : 'warning'; ?>">
@@ -153,7 +160,7 @@ ob_start();
                                 </td>
                                 <td>
                                     <div class="btn-group">
-                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['nome_jogo']); ?>" 
+                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['nome_jogo']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
                                            class="btn btn-sm btn-info" 
                                            target="_blank">
                                             <i class="fas fa-file-alt"></i> Comprovante
@@ -166,6 +173,32 @@ ob_start();
                                     </div>
                                 </td>
                             </tr>
+                            
+                            <!-- Modal para exibir os números da aposta manual -->
+                            <div class="modal fade" id="modalNumerosManuais<?php echo $aposta['id']; ?>" tabindex="-1">
+                                <div class="modal-dialog modal-lg">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Números da Aposta</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <?php
+                                            // Formatação dos números para visualização mais amigável
+                                            $numeros = explode(',', $aposta['numeros']);
+                                            ?>
+                                            <div class="jogo-numeros-container text-center">
+                                                <?php foreach ($numeros as $numero): ?>
+                                                <span class="jogo-numero"><?php echo str_pad(trim($numero), 2, '0', STR_PAD_LEFT); ?></span>
+                                                <?php endforeach; ?>
+                                            </div>
+                                            <hr>
+                                            <p><strong>Números originais:</strong></p>
+                                            <pre class="mb-0"><?php echo $aposta['numeros']; ?></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -306,6 +339,11 @@ ob_start();
                                                 onclick="confirmarExclusao(<?php echo $aposta['id']; ?>)">
                                             <i class="fas fa-trash"></i>
                                         </button>
+                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['jogo_nome']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
+                                           class="btn btn-sm btn-info" 
+                                           target="_blank">
+                                            <i class="fas fa-file-alt"></i> Comprovante
+                                        </a>
                                     </td>
                                 </tr>
 
@@ -318,6 +356,45 @@ ob_start();
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>
                                             <div class="modal-body">
+                                                <?php
+                                                // Formatação dos números para visualização mais amigável
+                                                // Tenta extrair os números do texto completo
+                                                $numeros_texto = $aposta['numeros'];
+                                                $numeros_extraidos = [];
+                                                
+                                                // Se tiver quebras de linha, pode ser um formato de importação
+                                                if (strpos($numeros_texto, "\n") !== false) {
+                                                    $linhas = explode("\n", $numeros_texto);
+                                                    // Ignorar a primeira linha (título do jogo)
+                                                    if (count($linhas) > 1) {
+                                                        array_shift($linhas);
+                                                        foreach ($linhas as $linha) {
+                                                            if (preg_match_all('/\d+/', $linha, $matches)) {
+                                                                $numeros_extraidos = array_merge($numeros_extraidos, $matches[0]);
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Tentar extrair números com expressão regular
+                                                    preg_match_all('/\d+/', $numeros_texto, $matches);
+                                                    $numeros_extraidos = $matches[0];
+                                                }
+                                                
+                                                // Garantir que não há duplicatas e que os números estão ordenados
+                                                $numeros_extraidos = array_unique($numeros_extraidos);
+                                                sort($numeros_extraidos, SORT_NUMERIC);
+                                                ?>
+                                                
+                                                <?php if (!empty($numeros_extraidos)): ?>
+                                                    <div class="jogo-numeros-container text-center mb-4">
+                                                        <?php foreach ($numeros_extraidos as $numero): ?>
+                                                        <span class="jogo-numero"><?php echo str_pad(trim($numero), 2, '0', STR_PAD_LEFT); ?></span>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                    <hr>
+                                                <?php endif; ?>
+                                                
+                                                <p><strong>Texto completo da aposta:</strong></p>
                                                 <pre class="mb-0"><?php echo htmlspecialchars($aposta['numeros']); ?></pre>
                                             </div>
                                         </div>
@@ -511,6 +588,40 @@ function confirmarExclusao(id) {
         }
     });
 }
+
+// Função auxiliar para converter nome do jogo para classe CSS
+function getJogoClass(jogoNome) {
+    // Remove acentos e converte para minúsculas
+    const nome = jogoNome.toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '-');
+    
+    return 'jogo-' + nome;
+}
+
+// Aplicar as classes aos contêineres de números ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    // Para as apostas manuais
+    const modaisNumerosManuais = document.querySelectorAll('[id^=modalNumerosManuais]');
+    modaisNumerosManuais.forEach(modal => {
+        const jogoNome = modal.closest('tr').querySelector('td:nth-child(3)').textContent.trim();
+        const numeroContainer = modal.querySelector('.jogo-numeros-container');
+        if (numeroContainer) {
+            numeroContainer.classList.add(getJogoClass(jogoNome));
+        }
+    });
+    
+    // Para as apostas importadas
+    const modaisNumerosImportados = document.querySelectorAll('[id^=modalNumeros]:not([id^=modalNumerosManuais])');
+    modaisNumerosImportados.forEach(modal => {
+        const jogoNome = modal.closest('tr').querySelector('td:nth-child(4)').textContent.trim();
+        const numeroContainer = modal.querySelector('.jogo-numeros-container');
+        if (numeroContainer) {
+            numeroContainer.classList.add(getJogoClass(jogoNome));
+        }
+    });
+});
 </script>
 
 <style>
@@ -540,86 +651,90 @@ function confirmarExclusao(id) {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Estilo para as bolinhas de números */
-.numero-bolinha {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 28px !important;
-    height: 28px !important;
-    min-width: 28px !important;
-    background-color: #4e73df !important;
-    color: white !important;
-    border-radius: 50% !important;
-    margin: 2px !important;
-    font-weight: 600 !important;
-    font-size: 13px !important;
-    padding: 0 !important;
-    line-height: 1 !important;
-    text-align: center !important;
+/* Estilos para as bolinhas de números */
+.jogo-numero {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    text-align: center;
+    color: white;
+    border-radius: 50%;
+    margin: 5px;
+    font-weight: bold;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.numeros-container {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 3px !important;
-    padding: 4px !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    min-width: 200px !important;
+/* Cores específicas para cada tipo de jogo */
+.jogo-lotofacil .jogo-numero {
+    background-color: #9c27b0; /* Roxo para Lotofácil */
 }
 
-/* Ajustes na tabela */
-.table td {
-    vertical-align: middle !important;
-    padding: 0.75rem !important;
+.jogo-mega-sena .jogo-numero {
+    background-color: #209869; /* Verde para Mega-Sena */
 }
 
+.jogo-dia-de-sorte .jogo-numero,
+.jogo-lotomania .jogo-numero {
+    background-color: #fd7e14; /* Laranja para Dia de Sorte e Lotomania */
+}
+
+.jogo-quina .jogo-numero {
+    background-color: #260085; /* Azul escuro para Quina */
+}
+
+.jogo-timemania .jogo-numero {
+    background-color: #209869; /* Verde para Timemania */
+}
+
+.jogo-mais-milionaria .jogo-numero {
+    background-color: #9c27b0; /* Roxo para Mais Milionária */
+}
+
+/* Padrão para outros jogos não especificados */
+.jogo-numero {
+    background-color: #007bff; /* Azul padrão */
+}
+
+/* Formatação para a exibição de números no modal */
+.jogo-numeros-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Estilos para a tabela de apostas */
 .table th {
-    white-space: nowrap !important;
-}
-
-/* Coluna de números mais larga */
-.table th:nth-child(4),
-.table td:nth-child(4) {
-    min-width: 280px !important;
-    max-width: 400px !important;
-}
-
-/* Estilos para apostas premiadas */
-tr.aposta-premiada {
-    background-color: rgba(40, 167, 69, 0.05) !important;
-}
-
-tr.aposta-premiada:hover {
-    background-color: rgba(40, 167, 69, 0.1) !important;
-}
-
-.text-premio {
-    color:rgb(5, 90, 25) !important;
-    font-weight: bold !important;
+    background-color: #f8f9fa;
+    color: #495057;
 }
 
 .badge-premio {
-    position: absolute;
-    top: -5px;
-    right: -10px;
-    background-color: #28a745;
-    color: white;
-    border-radius: 50%;
-    width: 20px;
-    height: 20px;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    background-color: #ffc107;
+    color: #212529;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    margin-left: 8px;
+    font-size: 12px;
+}
+
+.text-premio {
+    color: #28a745;
+    font-weight: bold;
 }
 
 .premio-container {
-    position: relative;
-    display: inline-block;
-    padding-right: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.aposta-premiada {
+    background-color: rgba(40, 167, 69, 0.1);
 }
 
 .table {
