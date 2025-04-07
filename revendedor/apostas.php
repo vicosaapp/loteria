@@ -78,6 +78,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT 
             ai.id,
+            ai.usuario_id,
             ai.jogo_nome,
             ai.numeros,
             ai.valor_aposta,
@@ -134,13 +135,13 @@ ob_start();
                             <th>Jogo</th>
                             <th>Números</th>
                             <th>Valor</th>
-                            <th>Status</th>
+                            <th>Valor Prêmio</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($apostas as $aposta): ?>
-                            <tr>
+                            <tr class="<?php echo $aposta['valor_premio'] > 0 ? 'aposta-premiada' : ''; ?>">
                                 <td><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></td>
                                 <td><?php echo $aposta['nome_apostador']; ?></td>
                                 <td><?php echo $aposta['nome_jogo']; ?></td>
@@ -153,14 +154,19 @@ ob_start();
                                     </button>
                                 </td>
                                 <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
-                                <td>
-                                    <span class="badge bg-<?php echo $aposta['status'] === 'aprovada' ? 'success' : 'warning'; ?>">
-                                        <?php echo ucfirst($aposta['status']); ?>
-                                    </span>
+                                <td class="<?php echo $aposta['valor_premio'] > 0 ? 'text-premio' : ''; ?>">
+                                    <?php if ($aposta['valor_premio'] > 0): ?>
+                                        <div class="premio-container">
+                                            <div>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></div>
+                                            <span class="badge-premio"><i class="fas fa-trophy"></i></span>
+                                        </div>
+                                    <?php else: ?>
+                                        R$ 0,00
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <div class="btn-group">
-                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['nome_jogo']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
+                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo rawurlencode($aposta['nome_jogo']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
                                            class="btn btn-sm btn-info" 
                                            target="_blank">
                                             <i class="fas fa-file-alt"></i> Comprovante
@@ -334,16 +340,18 @@ ob_start();
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <button type="button" 
-                                                class="btn btn-sm btn-danger"
-                                                onclick="confirmarExclusao(<?php echo $aposta['id']; ?>)">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['jogo_nome']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
-                                           class="btn btn-sm btn-info" 
-                                           target="_blank">
-                                            <i class="fas fa-file-alt"></i> Comprovante
-                                        </a>
+                                        <div class="btn-group">
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-danger"
+                                                    onclick="confirmarExclusao(<?php echo $aposta['id']; ?>)">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            <a class="btn btn-sm btn-info" 
+                                               href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo rawurlencode($aposta['jogo_nome']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
+                                               target="_blank">
+                                                <i class="fas fa-file-alt"></i> Comprovante
+                                            </a>
+                                        </div>
                                     </td>
                                 </tr>
 

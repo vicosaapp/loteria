@@ -94,6 +94,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Este apostador não está vinculado à sua conta");
         }
         
+        // Verificar se já existe uma aposta idêntica (mesmo apostador, jogo e números)
+        $stmt = $pdo->prepare("
+            SELECT id FROM apostas_importadas 
+            WHERE usuario_id = ? 
+            AND jogo_nome = ? 
+            AND numeros = ? 
+            AND DATE(created_at) = CURDATE()
+        ");
+        $stmt->execute([
+            $usuario_id, 
+            trim(explode("\n", $_POST['apostas'])[0]),
+            $_POST['apostas']
+        ]);
+        
+        if ($stmt->fetch()) {
+            throw new Exception("Esta aposta já foi registrada hoje. Não são permitidas apostas duplicadas.");
+        }
+        
         // Preparar os dados para inserção
         $dados = [
             'revendedor_id' => $_SESSION['usuario_id'],

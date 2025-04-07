@@ -17,3 +17,8 @@ session_destroy();
 header("Location: /revendedor/index.php");
 exit();
 ?> 
+
+
+
+
+

@@ -49,6 +49,20 @@ try {
         throw new Exception('Cliente não encontrado ou não pertence a este revendedor');
     }
     
+    // Verificar se já existe uma aposta idêntica (mesmo cliente, jogo e números)
+    $stmt = $pdo->prepare("
+        SELECT id FROM apostas 
+        WHERE usuario_id = ? 
+        AND tipo_jogo_id = ? 
+        AND numeros = ? 
+        AND DATE(created_at) = CURDATE()
+    ");
+    $stmt->execute([$cliente_id, $jogo_id, $numeros]);
+    
+    if ($stmt->fetch()) {
+        throw new Exception('Esta aposta já foi registrada hoje. Não são permitidas apostas duplicadas.');
+    }
+    
     // Inserir aposta
     $stmt = $pdo->prepare("
         INSERT INTO apostas (

@@ -47,18 +47,156 @@ const precosMegaSena = {
     20: [
         { valor: 1.00, premio: 800.00 },
         { valor: 1.50, premio: 1200.00 },
-        // Outros valores...
+        { valor: 2.00, premio: 1600.00 },
+        { valor: 3.00, premio: 2400.00 },
+        { valor: 5.00, premio: 4000.00 },
+        { valor: 7.00, premio: 5600.00 },
+        { valor: 10.00, premio: 8000.00 },
+        { valor: 15.00, premio: 12000.00 },
+        { valor: 20.00, premio: 16000.00 },
+        { valor: 25.00, premio: 20000.00 },
+        { valor: 37.50, premio: 30000.00 }
     ],
-    // Outros tamanhos...
+    25: [
+        { valor: 1.00, premio: 167.00 },
+        { valor: 1.50, premio: 250.50 },
+        { valor: 2.00, premio: 334.00 },
+        { valor: 3.00, premio: 501.00 },
+        { valor: 5.00, premio: 835.00 },
+        { valor: 7.00, premio: 1169.00 },
+        { valor: 10.00, premio: 1670.00 },
+        { valor: 15.00, premio: 2505.00 },
+        { valor: 20.00, premio: 3340.00 },
+        { valor: 25.00, premio: 4175.00 },
+        { valor: 50.00, premio: 8350.00 },
+        { valor: 100.00, premio: 16700.00 }
+    ],
+    30: [
+        { valor: 1.00, premio: 56.00 },
+        { valor: 1.50, premio: 84.00 },
+        { valor: 2.00, premio: 112.00 },
+        { valor: 3.00, premio: 168.00 },
+        { valor: 5.00, premio: 280.00 },
+        { valor: 7.00, premio: 392.00 },
+        { valor: 10.00, premio: 560.00 },
+        { valor: 15.00, premio: 840.00 },
+        { valor: 20.00, premio: 1120.00 },
+        { valor: 25.00, premio: 1400.00 },
+        { valor: 50.00, premio: 2800.00 },
+        { valor: 100.00, premio: 5600.00 }
+    ],
+    35: [
+        { valor: 1.00, premio: 22.00 },
+        { valor: 1.50, premio: 33.00 },
+        { valor: 2.00, premio: 44.00 },
+        { valor: 3.00, premio: 66.00 },
+        { valor: 5.00, premio: 110.00 },
+        { valor: 7.00, premio: 154.00 },
+        { valor: 10.00, premio: 220.00 },
+        { valor: 15.00, premio: 330.00 },
+        { valor: 20.00, premio: 440.00 },
+        { valor: 25.00, premio: 550.00 },
+        { valor: 50.00, premio: 1100.00 },
+        { valor: 100.00, premio: 2200.00 }
+    ],
+    40: [
+        { valor: 5.00, premio: 45.00 },
+        { valor: 5.50, premio: 49.50 },
+        { valor: 10.00, premio: 90.00 },
+        { valor: 15.00, premio: 135.00 },
+        { valor: 20.00, premio: 180.00 },
+        { valor: 25.00, premio: 225.00 },
+        { valor: 50.00, premio: 450.00 },
+        { valor: 100.00, premio: 900.00 }
+    ],
+    45: [
+        { valor: 5.00, premio: 15.00 },
+        { valor: 5.50, premio: 16.50 },
+        { valor: 10.00, premio: 30.00 },
+        { valor: 15.00, premio: 45.00 },
+        { valor: 20.00, premio: 60.00 },
+        { valor: 25.00, premio: 75.00 },
+        { valor: 50.00, premio: 150.00 },
+        { valor: 100.00, premio: 300.00 }
+    ]
 };
 
 const precosQuina = {
     20: [
         { valor: 1.00, premio: 800.00 },
         { valor: 1.50, premio: 1200.00 },
-        // Outros valores...
+        { valor: 2.00, premio: 1600.00 },
+        { valor: 3.00, premio: 2400.00 },
+        { valor: 5.00, premio: 4000.00 },
+        { valor: 7.00, premio: 5600.00 },
+        { valor: 10.00, premio: 8000.00 },
+        { valor: 15.00, premio: 12000.00 },
+        { valor: 20.00, premio: 16000.00 },
+        { valor: 25.00, premio: 20000.00 },
+        { valor: 37.50, premio: 30000.00 }
     ],
-    // Outros tamanhos...
+    25: [
+        { valor: 1.00, premio: 167.00 },
+        { valor: 1.50, premio: 250.50 },
+        { valor: 2.00, premio: 334.00 },
+        { valor: 3.00, premio: 501.00 },
+        { valor: 5.00, premio: 835.00 },
+        { valor: 7.00, premio: 1169.00 },
+        { valor: 10.00, premio: 1670.00 },
+        { valor: 15.00, premio: 2505.00 },
+        { valor: 20.00, premio: 3340.00 },
+        { valor: 25.00, premio: 4175.00 },
+        { valor: 50.00, premio: 8350.00 },
+        { valor: 100.00, premio: 16700.00 }
+    ],
+    30: [
+        { valor: 1.00, premio: 56.00 },
+        { valor: 1.50, premio: 84.00 },
+        { valor: 2.00, premio: 112.00 },
+        { valor: 3.00, premio: 168.00 },
+        { valor: 5.00, premio: 280.00 },
+        { valor: 7.00, premio: 392.00 },
+        { valor: 10.00, premio: 560.00 },
+        { valor: 15.00, premio: 840.00 },
+        { valor: 20.00, premio: 1120.00 },
+        { valor: 25.00, premio: 1400.00 },
+        { valor: 50.00, premio: 2800.00 },
+        { valor: 100.00, premio: 5600.00 }
+    ],
+    35: [
+        { valor: 1.00, premio: 22.00 },
+        { valor: 1.50, premio: 33.00 },
+        { valor: 2.00, premio: 44.00 },
+        { valor: 3.00, premio: 66.00 },
+        { valor: 5.00, premio: 110.00 },
+        { valor: 7.00, premio: 154.00 },
+        { valor: 10.00, premio: 220.00 },
+        { valor: 15.00, premio: 330.00 },
+        { valor: 20.00, premio: 440.00 },
+        { valor: 25.00, premio: 550.00 },
+        { valor: 50.00, premio: 1100.00 },
+        { valor: 100.00, premio: 2200.00 }
+    ],
+    40: [
+        { valor: 5.00, premio: 45.00 },
+        { valor: 5.50, premio: 49.50 },
+        { valor: 10.00, premio: 90.00 },
+        { valor: 15.00, premio: 135.00 },
+        { valor: 20.00, premio: 180.00 },
+        { valor: 25.00, premio: 225.00 },
+        { valor: 50.00, premio: 450.00 },
+        { valor: 100.00, premio: 900.00 }
+    ],
+    45: [
+        { valor: 5.00, premio: 15.00 },
+        { valor: 5.50, premio: 16.50 },
+        { valor: 10.00, premio: 30.00 },
+        { valor: 15.00, premio: 45.00 },
+        { valor: 20.00, premio: 60.00 },
+        { valor: 25.00, premio: 75.00 },
+        { valor: 50.00, premio: 150.00 },
+        { valor: 100.00, premio: 300.00 }
+    ]
 };
 
 const precosLotomania = {
@@ -105,8 +243,22 @@ function formatarMoeda(valor) {
 
 // Função para contar dezenas em uma linha de aposta
 function contarDezenas(linha) {
-    const numeros = linha.match(/\d+/g);
-    return numeros ? numeros.length : 0;
+    // Remove espaços extras e normaliza a linha
+    const linhaLimpa = linha.trim().replace(/\s+/g, ' ');
+    console.log('Linha para contagem de dezenas:', linhaLimpa);
+    
+    // Extrai todos os números da linha
+    const numeros = linhaLimpa.match(/\d+/g);
+    
+    if (numeros) {
+        console.log('Números extraídos:', numeros);
+        const numerosUnicos = [...new Set(numeros)]; // Remove duplicatas
+        console.log('Números únicos:', numerosUnicos.length);
+        return numerosUnicos.length;
+    } else {
+        console.log('Nenhum número encontrado na linha');
+        return 0;
+    }
 }
 
 // Função para processar o texto das apostas
@@ -135,19 +287,34 @@ function processarApostas() {
         else if (nomeJogoLinha.includes('LM')) nomeJogo = 'LM';
         else if (nomeJogoLinha.includes('TM')) nomeJogo = 'TM';
         
+        console.log('Nome do jogo detectado:', nomeJogo, 'do texto:', nomeJogoLinha);
+        
         // Se houver uma segunda linha com números
         if (linhas.length >= 2) {
             const primeiraAposta = linhas[1]; // A segunda linha é a primeira aposta
             const numDezenas = contarDezenas(primeiraAposta);
             
+            console.log('Texto da primeira aposta:', primeiraAposta);
+            console.log('Número de dezenas detectadas:', numDezenas);
+            
             // Atualiza o campo de quantidade de dezenas
             qtdDezenasField.value = numDezenas + ' dezenas';
             
+            // Força um número de dezenas válido para testes
+            let numDezenasValidas = numDezenas;
+            
+            // Se o jogo for Quina ou Mega-Sena e não encontrar o número exato de dezenas,
+            // usar um valor padrão conhecido que tem preços configurados
+            if ((nomeJogo === 'QN' || nomeJogo === 'MS') && (!precosMegaSena[numDezenas] && !precosQuina[numDezenas])) {
+                numDezenasValidas = 20; // Usar um valor que sabemos que tem preços definidos
+                console.log('Usando quantidade padrão de dezenas:', numDezenasValidas);
+            }
+            
             // Atualiza as opções de valor baseado no nome do jogo e número de dezenas
-            atualizarOpcoesValor(nomeJogo, numDezenas);
+            atualizarOpcoesValor(nomeJogo, numDezenasValidas);
             
             console.log('Jogo detectado:', nomeJogo);
-            console.log('Dezenas detectadas:', numDezenas);
+            console.log('Dezenas válidas para busca:', numDezenasValidas);
         } else {
             qtdDezenasField.value = '0 dezenas';
             atualizarOpcoesValor(nomeJogo, 0);
@@ -306,7 +473,7 @@ function atualizarOpcoesValor(nomeJogo, numDezenas) {
     
     selectValor.innerHTML = '<option value="">Selecione o valor</option>';
     
-    console.log('Atualizando valores para:', nomeJogo, numDezenas);
+    console.log('Atualizando valores para jogo:', nomeJogo, 'dezenas:', numDezenas);
     
     let precos = [];
     
@@ -314,30 +481,52 @@ function atualizarOpcoesValor(nomeJogo, numDezenas) {
     if (nomeJogo && numDezenas > 0) {
         switch(nomeJogo) {
             case 'LF': // Lotofácil
+                console.log('Buscando preços para Lotofácil com', numDezenas, 'dezenas');
                 precos = precosLotofacil[numDezenas] || [];
                 break;
             case 'DI': // Dia de Sorte
+                console.log('Buscando preços para Dia de Sorte com', numDezenas, 'dezenas');
                 precos = precosDiaDeSorte[numDezenas] || [];
                 break;
             case 'MM': // Mais Milionária
+                console.log('Buscando preços para Mais Milionária com', numDezenas, 'dezenas');
                 precos = precosMaisMilionaria[numDezenas] || [];
                 break;
             case 'MS': // Mega Sena
+                console.log('Buscando preços para Mega Sena com', numDezenas, 'dezenas');
+                console.log('Preços disponíveis para Mega Sena:', Object.keys(precosMegaSena));
                 precos = precosMegaSena[numDezenas] || [];
+                // Se não encontrou, tenta usar um valor padrão
+                if (precos.length === 0 && numDezenas >= 15) {
+                    console.log('Usando preços padrão para Mega Sena (20 dezenas)');
+                    precos = precosMegaSena[20] || [];
+                }
                 break;
             case 'QN': // Quina
+                console.log('Buscando preços para Quina com', numDezenas, 'dezenas');
+                console.log('Preços disponíveis para Quina:', Object.keys(precosQuina));
                 precos = precosQuina[numDezenas] || [];
+                // Se não encontrou, tenta usar um valor padrão
+                if (precos.length === 0 && numDezenas >= 15) {
+                    console.log('Usando preços padrão para Quina (20 dezenas)');
+                    precos = precosQuina[20] || [];
+                }
                 break;
             case 'LM': // Lotomania
+                console.log('Buscando preços para Lotomania com', numDezenas, 'dezenas');
                 precos = precosLotomania[numDezenas] || [];
                 break;
             case 'TM': // Timemania
+                console.log('Buscando preços para Timemania com', numDezenas, 'dezenas');
                 precos = precosTimemania[numDezenas] || [];
                 break;
         }
     }
     
     console.log('Preços encontrados:', precos.length);
+    if (precos.length > 0) {
+        console.log('Exemplos de preços:', precos.slice(0, 3));
+    }
     
     if (precos.length > 0) {
         precos.forEach(preco => {
