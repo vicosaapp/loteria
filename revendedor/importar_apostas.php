@@ -82,10 +82,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $valor_aposta = number_format(floatval($valor_aposta), 2, '.', '');
         
         // Tratar valor do prêmio
-        $valor_premio = str_replace(['R$', ' '], '', $_POST['valor_premiacao']);
-        $valor_premio = str_replace('.', '', $valor_premio); // Remove pontos de milhar
-        $valor_premio = str_replace(',', '.', $valor_premio); // Converte vírgula em ponto
-        $valor_premio = number_format(floatval($valor_premio), 2, '.', '');
+        $valor_premio = $_POST['valor_premiacao'];
+        error_log("Valor de premiação original: " . $valor_premio);
+
+        // Verifica se o valor do prêmio já está no formato correto (com vírgula como separador decimal)
+        if (strpos($valor_premio, ',') !== false) {
+            // Se já está no formato brasileiro (1.234,56), converte para o formato do banco (1234.56)
+            $valor_premio_banco = str_replace(['R$', ' '], '', $valor_premio);
+            $valor_premio_banco = str_replace('.', '', $valor_premio_banco); // Remove pontos de milhar
+            $valor_premio_banco = str_replace(',', '.', $valor_premio_banco); // Converte vírgula em ponto
+            $valor_premio_banco = number_format(floatval($valor_premio_banco), 2, '.', '');
+            
+            error_log("Valor de premiação convertido para o banco: " . $valor_premio_banco);
+            
+            // Mantém o valor original formatado para exibição
+            $valor_premio_exibicao = $valor_premio;
+        } else {
+            // Se está em outro formato, trata normalmente
+            $valor_premio_banco = str_replace(['R$', ' '], '', $valor_premio);
+            $valor_premio_banco = str_replace('.', '', $valor_premio_banco);
+            $valor_premio_banco = str_replace(',', '.', $valor_premio_banco);
+            $valor_premio_banco = number_format(floatval($valor_premio_banco), 2, '.', '');
+            
+            // Formata para exibição
+            $valor_premio_exibicao = number_format(floatval($valor_premio_banco), 2, ',', '.');
+            
+            error_log("Valor de premiação formatado: " . $valor_premio_exibicao);
+        }
         
         // Verificar se o apostador pertence ao revendedor atual
         $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE id = ? AND revendedor_id = ?");
@@ -119,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'jogo_nome' => trim(explode("\n", $_POST['apostas'])[0]),
             'numeros' => $_POST['apostas'],
             'valor_aposta' => $valor_aposta,
-            'valor_premio' => $valor_premio,
+            'valor_premio' => $valor_premio_banco,
             'whatsapp' => $whatsapp
         ];
 
@@ -159,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 trim(explode("\n", $_POST['apostas'])[0]),
                 $_POST['apostas'],
                 $valor_aposta,
-                $valor_premio,
+                $valor_premio_banco,
                 $whatsapp
             ]);
             $apostas_importadas_id = $pdo->lastInsertId();
@@ -373,7 +396,7 @@ ob_start();
                         <div class="input-group-prepend">
                             <span class="input-group-text">R$</span>
                         </div>
-                        <input type="text" id="valor_premiacao" name="valor_premiacao" class="form-control" value="0,00" readonly>
+                        <input type="text" id="valor_premiacao" name="valor_premiacao" class="form-control text-right" value="0,00" readonly>
                     </div>
                 </div>
 
@@ -430,9 +453,13 @@ ob_start();
     </div>
 </div>
 
-<!-- JavaScript -->
+<!-- Arquivos JavaScript -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Adicionar importação do script externo -->
 <script src="assets/js/importar-apostas.js"></script>
+</body>
+</html>
 
 <style>
 .numero-bolinha {
@@ -487,6 +514,11 @@ ob_start();
 
 #valor_aposta {
     text-align: right;
+}
+
+#valor_premiacao {
+    text-align: right;
+    font-weight: bold;
 }
 
 .text-danger {
