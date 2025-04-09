@@ -142,8 +142,8 @@ if (empty($apostas)) {
     }
     
     $sql .= " ORDER BY a.created_at DESC";
-    
-    $stmt = $pdo->prepare($sql);
+
+            $stmt = $pdo->prepare($sql);
     $params = [
         ':usuario_id' => $usuario_id,
         ':jogo' => $jogo
@@ -155,13 +155,13 @@ if (empty($apostas)) {
     }
     
     $stmt->execute($params);
-    $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // Debug
     error_log("Buscando em apostas normais");
     error_log("Apostas normais encontradas: " . count($apostas));
 }
-
+            
 if (empty($apostas)) {
     die('Apostas não encontradas para o usuário ' . $usuario_id . ' e jogo ' . $jogo);
 }
@@ -276,7 +276,7 @@ $sql_jogo = "SELECT
                 COALESCE(vj.valor_premio, 1600.00) as valor_premio_padrao,
                 COALESCE(vj.dezenas, 15) as dezenas_padrao,
                 COALESCE(vj.valor_aposta, 2.00) as valor_aposta_padrao
-            FROM jogos j
+             FROM jogos j
             LEFT JOIN valores_jogos vj ON j.id = vj.jogo_id
             WHERE j.nome = :jogo 
             OR j.titulo_importacao = :jogo
@@ -522,10 +522,10 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
 
 ?>
 <!DOCTYPE html>
-<html>
-<head>
+                <html>
+                <head>
     <title>Comprovante de Aposta - <?php echo $jogo; ?></title>
-    <style>
+                    <style>
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
@@ -820,15 +820,15 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
             }
         }
         <?php echo $css_dinamico; ?>
-    </style>
-</head>
-<body>
+                    </style>
+                </head>
+                <body>
     <div class="container">
         <!-- Bordas laterais estilo loteria -->
         <div class="lottery-edge lottery-edge-left"></div>
         <div class="lottery-edge lottery-edge-right"></div>
         
-        <div class="header">
+                    <div class="header">
             <div class="concurso-badge">Concurso Nº <?php echo isset($aposta['numero_concurso']) && $aposta['numero_concurso'] !== 'Próximo' ? $aposta['numero_concurso'] : 'Próximo'; ?></div>
             <?php
             // Verificar qual caminho do logo funciona
@@ -844,9 +844,9 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
             ?>
             <img src="<?php echo $logo_path; ?>" alt="Logo" class="logo">
             <h2 class="jogo-titulo"><?php echo $aposta['jogo_nome']; ?></h2>
-        </div>
-        
-        <div class="info-block">
+                    </div>
+                    
+            <div class="info-block">
             <div class="info-row">
                 <strong>Comprovante Nº:</strong>
                 <span><?php echo str_pad($aposta['id'], 6, '0', STR_PAD_LEFT); ?></span>
@@ -855,29 +855,29 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
                 <strong>Concurso Nº:</strong>
                 <span><?php echo isset($aposta['numero_concurso']) && $aposta['numero_concurso'] !== 'Próximo' ? $aposta['numero_concurso'] : 'Próximo concurso'; ?></span>
             </div>
-            <div class="info-row">
-                <strong>Data e hora:</strong>
-                <span><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></span>
-            </div>
-            <div class="info-row">
-                <strong>Apostador:</strong>
-                <span><?php echo $aposta['apostador']; ?></span>
-            </div>
-            <div class="info-row">
-                <strong>Revendedor:</strong>
-                <span><?php echo $aposta['revendedor']; ?></span>
-            </div>
-            <div class="info-row">
-                <strong>Valor da Aposta:</strong>
+                <div class="info-row">
+                    <strong>Data e hora:</strong>
+                    <span><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></span>
+                </div>
+                <div class="info-row">
+                    <strong>Apostador:</strong>
+                    <span><?php echo $aposta['apostador']; ?></span>
+                </div>
+                <div class="info-row">
+                    <strong>Revendedor:</strong>
+                    <span><?php echo $aposta['revendedor']; ?></span>
+                </div>
+                <div class="info-row">
+                    <strong>Valor da Aposta:</strong>
                 <span>R$ <?php echo number_format($valor_por_aposta, 2, ',', '.'); ?></span>
-            </div>
-        </div>
-        
-        <div class="info-block">
+                </div>
+                    </div>
+                    
+            <div class="info-block">
             <h3>Aposta Realizada</h3>
             <div class="aposta-grupo <?php echo sanitizeClassName($aposta['jogo_nome']); ?>">
-                <div class="numbers">
-                    <?php 
+                        <div class="numbers">
+                            <?php 
                     // Extrair os números da aposta
                     $numeros_aposta = extrairNumeros($aposta['numeros']);
                     
@@ -891,7 +891,7 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
                         echo '<p class="text-danger">Nenhum número encontrado</p>';
                     } else {
                         // Exibir os números
-                        foreach ($numeros_aposta as $numero): 
+                            foreach ($numeros_aposta as $numero): 
                             // Garantir que o número seja exibido corretamente
                             $numero = intval($numero); // Remover zeros à esquerda
                         ?>
@@ -901,29 +901,29 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
                         <?php endforeach; 
                     }
                     ?>
-                </div>
-            </div>
-        </div>
-        
-        <div class="game-info">
-            <h3>Informações do Jogo</h3>
-            <div class="info-row">
+                        </div>
+                    </div>
+                    </div>
+                    
+            <div class="game-info">
+                <h3>Informações do Jogo</h3>
+                <div class="info-row">
                 <strong>Nome do Jogo:</strong>
                 <span><?php echo $info_jogo['nome']; ?></span>
-            </div>
-            <div class="info-row">
+                </div>
+                <div class="info-row">
                 <strong>Números Necessários:</strong>
                 <span><?php echo $info_jogo['dezenas_padrao']; ?> números</span>
-            </div>
-            <div class="info-row">
+                </div>
+                <div class="info-row">
                 <strong>Prêmio por Acerto:</strong>
                 <span>R$ <?php echo number_format($valor_premio_unitario, 2, ',', '.'); ?></span>
-            </div>
-            <div class="info-row">
+                </div>
+                <div class="info-row">
                 <strong>Ganho Máximo Possível:</strong>
                 <span>R$ <?php echo number_format($valor_premio, 2, ',', '.'); ?></span>
-            </div>
-        </div>
+                </div>
+                    </div>
 
         <div class="total-info">
             <h3>Resumo da Aposta</h3>
@@ -934,9 +934,9 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
         <div class="warning">
             <p><strong>ATENÇÃO:</strong> Este comprovante é sua garantia. Guarde-o em local seguro.</p>
             <p>Em caso de premiação, este documento será necessário para receber o prêmio.</p>
-        </div>
-        
-        <div class="footer">
+                    </div>
+                    
+                    <div class="footer">
             <p><strong>ID da aposta:</strong> <?php echo str_pad($aposta['id'], 8, '0', STR_PAD_LEFT); ?></p>
             <p>Gerado em: <?php echo date('d/m/Y H:i:s'); ?></p>
             <p>Este comprovante tem validade legal e não necessita de assinatura.</p>
@@ -948,7 +948,7 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
                 ?>
             </div>
         </div>
-    </div>
+                    </div>
 
     <div class="text-center mt-4 no-print">
         <button onclick="window.print()" class="btn btn-primary">
@@ -995,5 +995,5 @@ foreach ($cores_jogos as $jogo_classe => $cor) {
             document.head.appendChild(style);
         }
     </script>
-</body>
+                </body>
 </html>

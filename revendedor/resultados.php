@@ -216,9 +216,9 @@ ob_start();
                 <button type="button" class="btn btn-light" id="btnProcessarGanhadores">
                     <i class="fas fa-users me-2"></i>Processar Ganhadores
                 </button>
-                <button type="button" class="btn btn-light" id="btnAtualizarResultados">
-                    <i class="fas fa-sync-alt me-2"></i>Atualizar Resultados
-                </button>
+            <button type="button" class="btn btn-light" id="btnAtualizarResultados">
+                <i class="fas fa-sync-alt me-2"></i>Atualizar Resultados
+            </button>
                 <a href="ajax/corrigir_estrutura_tabelas.php" target="_blank" class="btn btn-secondary ms-2">
                     <i class="fas fa-database me-2"></i>Corrigir DB
                 </a>
@@ -399,8 +399,8 @@ ob_start();
                         ?>
                             <div class="winner-item">
                                 <div class="winner-info">
-                                    <div class="winner-name">
-                                        <i class="fas fa-user"></i>
+                                <div class="winner-name">
+                                    <i class="fas fa-user"></i>
                                         <?php echo htmlspecialchars($ganhador['nome'] ?? ''); ?>
                                         <span class="badge-acertos">
                                             <?php if (strpos($ganhador['tipo'], 'Acertou Todos') !== false): ?>
@@ -427,7 +427,7 @@ ob_start();
                                 </div>
                             </div>
                         <?php 
-                            }
+                                }
                         } else {
                         ?>
                             <div class="alert alert-info">
@@ -942,7 +942,7 @@ function processarGanhadores() {
                             width: '80%',
                             confirmButtonText: 'Fechar'
                         });
-                    } else {
+            } else {
                         // Recarregar página
                         window.location.reload();
                     }

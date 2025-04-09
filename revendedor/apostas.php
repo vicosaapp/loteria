@@ -159,7 +159,7 @@ ob_start();
                                         <div class="premio-container">
                                             <div>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></div>
                                             <span class="badge-premio"><i class="fas fa-trophy"></i></span>
-                                        </div>
+                                    </div>
                                     <?php else: ?>
                                         R$ 0,00
                                     <?php endif; ?>
@@ -341,11 +341,11 @@ ob_start();
                                     </td>
                                     <td>
                                         <div class="btn-group">
-                                            <button type="button" 
-                                                    class="btn btn-sm btn-danger"
-                                                    onclick="confirmarExclusao(<?php echo $aposta['id']; ?>)">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
+                                        <button type="button" 
+                                                class="btn btn-sm btn-danger"
+                                                onclick="confirmarExclusao(<?php echo $aposta['id']; ?>)">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
                                             <a class="btn btn-sm btn-info" 
                                                href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo rawurlencode($aposta['jogo_nome']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
                                                target="_blank">
