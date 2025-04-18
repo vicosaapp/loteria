@@ -49,6 +49,11 @@ function formatarValor($valor) {
     return 'R$ ' . number_format($valor, 2, ',', '.');
 }
 
+// Função PHP para formatar valor básico sem R$
+function formatarValorBasico($valor) {
+    return number_format($valor, 2, ',', '.');
+}
+
 $mensagem = '';
 $tipo_mensagem = '';
 $resultados_banco = [];
@@ -450,83 +455,81 @@ ob_start();
     </div>
 <?php endforeach; ?>
 
-<!-- Modal para Inserir Resultado -->
-<div class="modal fade" id="modalInserirResultado" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Inserir Resultado Manualmente</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- Modal para inserir resultados -->
+<div class="modal fade" id="modalInserirResultado" tabindex="-1" aria-labelledby="modalInserirResultadoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalInserirResultadoLabel">Inserir Resultado Manualmente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formInserirResultado">
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label for="jogo_id" class="form-label">Jogo</label>
+              <select class="form-select" id="jogo_id" name="jogo_id" required>
+                <option value="">Selecione o jogo</option>
+                <?php
+                // Buscar jogos do banco de dados
+                $stmt = $pdo->query("SELECT id, nome FROM jogos ORDER BY nome");
+                while ($jogo = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                  echo '<option value="' . $jogo['id'] . '">' . htmlspecialchars($jogo['nome']) . '</option>';
+                }
+                ?>
+              </select>
             </div>
-            <div class="modal-body">
-                <form id="formInserirResultado">
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="jogo_id" class="form-label">Jogo</label>
-                            <select class="form-select" id="jogo_id" name="jogo_id" required>
-                                <option value="">Selecione o jogo</option>
-                                <?php foreach ($resultados_banco as $jogo): ?>
-                                    <option value="<?php echo $jogo['id']; ?>"
-                                            data-min="<?php echo $jogo['minimo_numeros'] ?? 6; ?>"
-                                            data-max="<?php echo $jogo['maximo_numeros'] ?? 15; ?>">
-                                        <?php echo htmlspecialchars($jogo['nome']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="concurso" class="form-label">Número do Concurso</label>
-                            <input type="number" class="form-control" id="concurso" name="concurso" required>
-                        </div>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="data_sorteio" class="form-label">Data do Sorteio</label>
-                            <input type="datetime-local" class="form-control" id="data_sorteio" name="data_sorteio" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="valor_acumulado" class="form-label">Valor Acumulado</label>
-                            <div class="input-group">
-                                <span class="input-group-text">R$</span>
-                                <input type="text" class="form-control money" id="valor_acumulado" name="valor_acumulado">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Números Sorteados</label>
-                        <div id="numeros-grid" class="numeros-grid mb-2">
-                            <!-- Números serão gerados via JavaScript -->
-                        </div>
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i>
-                            Números selecionados: <span id="numeros-selecionados">Nenhum</span>
-                            <input type="hidden" name="numeros" id="numeros-input" required>
-                        </div>
-                    </div>
-                    
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="data_proximo" class="form-label">Data Próximo Sorteio</label>
-                            <input type="datetime-local" class="form-control" id="data_proximo" name="data_proximo">
-                        </div>
-                        <div class="col-md-6">
-                            <label for="valor_estimado" class="form-label">Valor Estimado Próximo</label>
-                            <div class="input-group">
-                                <span class="input-group-text">R$</span>
-                                <input type="text" class="form-control money" id="valor_estimado" name="valor_estimado">
-                            </div>
-                        </div>
-                    </div>
-                </form>
+            <div class="col-md-6">
+              <label for="concurso" class="form-label">Número do Concurso</label>
+              <input type="number" class="form-control" id="concurso" name="concurso" required>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnSalvarResultado">Salvar Resultado</button>
+          </div>
+          
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label for="data_sorteio" class="form-label">Data do Sorteio</label>
+              <input type="datetime-local" class="form-control" id="data_sorteio" name="data_sorteio" required>
             </div>
-        </div>
+            <div class="col-md-6">
+              <label for="valor_acumulado" class="form-label">Valor Acumulado (R$)</label>
+              <input type="text" class="form-control" id="valor_acumulado" name="valor_acumulado" placeholder="0,00">
+            </div>
+          </div>
+          
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <label for="data_proximo" class="form-label">Data do Próximo Sorteio</label>
+              <input type="datetime-local" class="form-control" id="data_proximo" name="data_proximo">
+            </div>
+            <div class="col-md-6">
+              <label for="valor_estimado" class="form-label">Valor Estimado Próximo (R$)</label>
+              <input type="text" class="form-control" id="valor_estimado" name="valor_estimado" placeholder="0,00">
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">Números Sorteados</label>
+            <input type="hidden" name="numeros" value="">
+            <div class="numeros-info mb-2">Números selecionados: 0/0</div>
+            <div class="numeros-sorteaveis d-flex flex-wrap gap-2">
+              <!-- Números serão inseridos via JavaScript -->
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSalvarResultado">Salvar Resultado</button>
+      </div>
     </div>
+  </div>
+</div>
+
+<!-- Botão para abrir o modal -->
+<div class="d-flex justify-content-end mb-4">
+  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalInserirResultado">
+    <i class="fas fa-plus-circle me-2"></i>Inserir Novo Resultado
+  </button>
 </div>
 
 <style>
@@ -995,6 +998,245 @@ document.addEventListener('DOMContentLoaded', function() {
         // Gerar grid de números
         gerarGradeNumeros();
     });
+
+    // Inicializar quando o modal for aberto
+    const btnAbrirModal = document.getElementById('btnAbrirModalResultado');
+    const modalResultado = document.getElementById('modalResultado');
+    
+    if (btnAbrirModal && modalResultado) {
+        btnAbrirModal.addEventListener('click', function() {
+            limparFormulario();
+            gerarGradeNumeros();
+        });
+    }
+    
+    // Botão para salvar resultado
+    const btnSalvarResultado = document.getElementById('btnSalvarResultado');
+    if (btnSalvarResultado) {
+        btnSalvarResultado.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Validar seleção de jogo
+            const jogoSelect = document.getElementById('jogo_id');
+            if (!jogoSelect.value) {
+                alert('Selecione um jogo');
+                jogoSelect.focus();
+                return;
+            }
+            
+            // Validar número do concurso
+            const concursoInput = document.querySelector('input[name="concurso"]');
+            if (!concursoInput.value) {
+                alert('Informe o número do concurso');
+                concursoInput.focus();
+                return;
+            }
+            
+            // Obter números selecionados
+            const numerosInput = document.querySelector('input[name="numeros"]');
+            if (!numerosInput.value) {
+                alert('Selecione os números sorteados');
+                return;
+            }
+            
+            // Validar data do sorteio
+            const dataSorteioInput = document.querySelector('input[name="data_sorteio"]');
+            if (!dataSorteioInput.value) {
+                alert('Informe a data do sorteio');
+                dataSorteioInput.focus();
+                return;
+            }
+            
+            // Preparar dados do formulário
+            const formData = new FormData();
+            formData.append('jogo_id', jogoSelect.value);
+            formData.append('concurso', concursoInput.value);
+            formData.append('numeros', numerosInput.value);
+            formData.append('data_sorteio', dataSorteioInput.value);
+            
+            // Adicionar valor acumulado
+            const valorAcumuladoInput = document.querySelector('input[name="valor_acumulado"]');
+            if (valorAcumuladoInput) {
+                formData.append('valor_acumulado', valorAcumuladoInput.value);
+            }
+            
+            // Adicionar data do próximo concurso
+            const dataProximoInput = document.querySelector('input[name="data_proximo"]');
+            if (dataProximoInput) {
+                formData.append('data_proximo', dataProximoInput.value);
+            }
+            
+            // Adicionar valor estimado
+            const valorEstimadoInput = document.querySelector('input[name="valor_estimado"]');
+            if (valorEstimadoInput) {
+                formData.append('valor_estimado', valorEstimadoInput.value);
+            }
+            
+            // Mostrar carregamento
+            const btnTexto = btnSalvarResultado.textContent;
+            btnSalvarResultado.disabled = true;
+            btnSalvarResultado.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            
+            // Enviar requisição
+            fetch('ajax/salvar_resultado.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Resultado salvo com sucesso!');
+                    // Fechar modal se estiver em uma
+                    const modal = document.getElementById('modalInserirResultado');
+                    if (modal && typeof bootstrap !== 'undefined') {
+                        const modalInstance = bootstrap.Modal.getInstance(modal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                    }
+                    
+                    // Recarregar a página para mostrar os novos resultados
+                    window.location.reload();
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao salvar resultado. Verifique o console para mais detalhes.');
+            })
+            .finally(() => {
+                // Restaurar botão
+                btnSalvarResultado.disabled = false;
+                btnSalvarResultado.textContent = btnTexto;
+            });
+        });
+    }
+    
+    // Atualizar grid de números quando o jogo mudar
+    const jogoSelect = document.getElementById('jogo_id');
+    if (jogoSelect) {
+        jogoSelect.addEventListener('change', function() {
+            atualizarGridNumeros();
+        });
+        
+        // Inicializar grid na carga da página
+        atualizarGridNumeros();
+    }
+    
+    function atualizarGridNumeros() {
+        if (!jogoSelect.value) return;
+        
+        // Obter o jogo selecionado
+        const option = jogoSelect.options[jogoSelect.selectedIndex];
+        const jogoNome = option.textContent.trim();
+        
+        // Determinar o número máximo baseado no jogo
+        let numeroMaximo = 60;
+        let maximoSelecao = 6;
+        
+        switch (jogoNome.toLowerCase()) {
+            case 'lotofácil':
+                numeroMaximo = 25;
+                maximoSelecao = 15;
+                break;
+            case 'quina':
+                numeroMaximo = 80;
+                maximoSelecao = 5;
+                break;
+            case 'lotomania':
+                numeroMaximo = 100;
+                maximoSelecao = 20;
+                break;
+            case 'timemania':
+                numeroMaximo = 80;
+                maximoSelecao = 7;
+                break;
+            case '+milionária':
+                numeroMaximo = 50;
+                maximoSelecao = 6;
+                break;
+            case 'dia de sorte':
+                numeroMaximo = 31;
+                maximoSelecao = 7;
+                break;
+            default: // Mega-Sena
+                numeroMaximo = 60;
+                maximoSelecao = 6;
+        }
+        
+        // Atualizar o container de números
+        const containerNumeros = document.querySelector('.numeros-sorteaveis');
+        if (containerNumeros) {
+            // Limpar container existente
+            containerNumeros.innerHTML = '';
+            
+            // Adicionar números
+            for (let i = 1; i <= numeroMaximo; i++) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-outline-dark numero-btn';
+                btn.dataset.numero = i;
+                btn.textContent = i.toString().padStart(2, '0');
+                
+                // Adicionar evento de clique
+                btn.addEventListener('click', function() {
+                    toggleNumero(this, maximoSelecao);
+                });
+                
+                containerNumeros.appendChild(btn);
+            }
+        }
+        
+        // Limpar seleção atual
+        document.querySelector('input[name="numeros"]').value = '';
+        atualizarContador();
+    }
+    
+    function toggleNumero(btn, maximoSelecao) {
+        // Toggle classe ativa
+        btn.classList.toggle('active');
+        
+        // Atualizar input com números selecionados
+        const numerosAtivos = document.querySelectorAll('.numero-btn.active');
+        if (numerosAtivos.length > maximoSelecao) {
+            alert(`Você só pode selecionar no máximo ${maximoSelecao} números.`);
+            btn.classList.remove('active');
+            return;
+        }
+        
+        // Atualizar o campo oculto com os números selecionados
+        const numeros = Array.from(numerosAtivos).map(el => el.dataset.numero);
+        document.querySelector('input[name="numeros"]').value = numeros.join(',');
+        
+        // Atualizar contador
+        atualizarContador();
+    }
+    
+    function atualizarContador() {
+        const contadorEl = document.querySelector('.numeros-info');
+        if (!contadorEl) return;
+        
+        const numerosInput = document.querySelector('input[name="numeros"]');
+        const selecionados = numerosInput.value ? numerosInput.value.split(',').length : 0;
+        
+        // Determinar o máximo baseado no jogo selecionado
+        const option = jogoSelect.options[jogoSelect.selectedIndex];
+        const jogoNome = option ? option.textContent.trim() : '';
+        
+        let maximoSelecao = 6;
+        switch (jogoNome.toLowerCase()) {
+            case 'lotofácil': maximoSelecao = 15; break;
+            case 'quina': maximoSelecao = 5; break;
+            case 'lotomania': maximoSelecao = 20; break;
+            case 'timemania': maximoSelecao = 7; break;
+            case '+milionária': maximoSelecao = 6; break;
+            case 'dia de sorte': maximoSelecao = 7; break;
+            default: maximoSelecao = 6; // Mega-Sena
+        }
+        
+        contadorEl.textContent = `Números selecionados: ${selecionados}/${maximoSelecao}`;
+    }
 });
 
 // Função para atualizar resultados
@@ -1198,22 +1440,129 @@ function formatarValor(valor) {
 
 // Variáveis globais
 let numerosSelecionados = [];
-let minNumeros = 6;
-let maxNumeros = 15;
+let maximoNumeros = 15; // Padrão para Lotofácil
+
+// Função para atualizar configuração com base no jogo selecionado
+function atualizarConfiguracaoPorJogo() {
+    const jogoSelect = document.getElementById('jogo_id');
+    if (!jogoSelect) return;
+    
+    const jogoId = jogoSelect.value;
+    numerosSelecionados = []; // Limpar seleções existentes
+    
+    // Resetar seleções visuais
+    const grid = document.getElementById('numeros-grid');
+    if (grid) {
+        const elementos = grid.getElementsByClassName('numero-item');
+        for (let i = 0; i < elementos.length; i++) {
+            elementos[i].classList.remove('selected');
+        }
+    }
+    
+    // Atualizar o display
+    atualizarNumerosDisplay();
+    
+    // Definir o máximo de números com base no jogo
+    switch (jogoId) {
+        case '3': // Lotofácil
+            maximoNumeros = 15;
+            break;
+        case '6': // Lotomania
+            maximoNumeros = 20;
+            break;
+        case '8': // Quina
+            maximoNumeros = 5;
+            break;
+        case '9': // Mega-Sena
+            maximoNumeros = 6;
+            break;
+        case '11': // Timemania
+            maximoNumeros = 7;
+            break;
+        case '14': // +Milionária
+            maximoNumeros = 6;
+            break;
+        case '15': // Dia de Sorte
+            maximoNumeros = 7;
+            break;
+        default:
+            maximoNumeros = 15;
+    }
+    
+    // Não chamar gerarGradeNumeros aqui para evitar referência cíclica
+    // Apenas atualizar a interface de números
+    criarGradeNumeros();
+}
 
 // Função para gerar a grade de números
 function gerarGradeNumeros() {
+    const jogoSelect = document.getElementById('jogo_id');
+    if (jogoSelect) {
+        jogoSelect.addEventListener('change', atualizarConfiguracaoPorJogo);
+        // Configurar na inicialização
+        atualizarConfiguracaoPorJogo();
+    } else {
+        // Se não houver select de jogo, criar a grade padrão
+        criarGradeNumeros();
+    }
+}
+
+// Função para criar a grade de números com base nas configurações atuais
+function criarGradeNumeros() {
     const grid = document.getElementById('numeros-grid');
-    if (!grid) return;
+    if (!grid) {
+        console.error('Elemento numeros-grid não encontrado');
+        return;
+    }
     
+    // Limpar grid atual
     grid.innerHTML = '';
     
-    for (let i = 1; i <= 60; i++) {
+    // Quantidade total de números disponíveis (pode variar por jogo)
+    let totalNumeros = 25;
+    
+    // Verificar o jogo selecionado para determinar o total de números
+    const jogoSelect = document.getElementById('jogo_id');
+    if (jogoSelect) {
+        const jogoId = jogoSelect.value;
+        
+        // Definir o total de números com base no jogo
+        switch (jogoId) {
+            case '3': // Lotofácil
+                totalNumeros = 25;
+                break;
+            case '6': // Lotomania
+                totalNumeros = 100;
+                break;
+            case '8': // Quina
+                totalNumeros = 80;
+                break;
+            case '9': // Mega-Sena
+                totalNumeros = 60;
+                break;
+            case '11': // Timemania
+                totalNumeros = 80;
+                break;
+            case '14': // +Milionária
+                totalNumeros = 50;
+                break;
+            case '15': // Dia de Sorte
+                totalNumeros = 31;
+                break;
+            default:
+                totalNumeros = 60;
+        }
+    }
+    
+    // Gerar números
+    for (let i = 1; i <= totalNumeros; i++) {
         const numero = document.createElement('div');
         numero.className = 'numero-item';
         numero.textContent = i < 10 ? `0${i}` : i;
         numero.setAttribute('data-numero', i);
-        numero.onclick = () => toggleNumero(numero, i);
+        numero.onclick = function() { 
+            toggleNumero(this, i); 
+        };
         grid.appendChild(numero);
     }
 }
@@ -1223,16 +1572,18 @@ function toggleNumero(elemento, numero) {
     const index = numerosSelecionados.indexOf(numero);
     
     if (index === -1) {
-        if (numerosSelecionados.length < maxNumeros) {
-            numerosSelecionados.push(numero);
-            elemento.classList.add('selected');
-        } else {
+        // Verificar se já atingiu o máximo de números
+        if (numerosSelecionados.length >= maximoNumeros) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Limite atingido',
-                text: `Você só pode selecionar até ${maxNumeros} números!`
+                text: `Você só pode selecionar ${maximoNumeros} números para este jogo.`
             });
+            return;
         }
+        
+        numerosSelecionados.push(numero);
+        elemento.classList.add('selected');
     } else {
         numerosSelecionados.splice(index, 1);
         elemento.classList.remove('selected');
@@ -1246,7 +1597,10 @@ function atualizarNumerosDisplay() {
     const display = document.getElementById('numeros-selecionados');
     const input = document.getElementById('numeros-input');
     
-    if (!display || !input) return;
+    if (!display || !input) {
+        console.error('Elementos de exibição não encontrados');
+        return;
+    }
     
     if (numerosSelecionados.length === 0) {
         display.textContent = 'Nenhum';
@@ -1256,84 +1610,231 @@ function atualizarNumerosDisplay() {
         display.textContent = numerosOrdenados.map(n => n < 10 ? `0${n}` : n).join(', ');
         input.value = numerosOrdenados.join(',');
     }
+    
+    // Adicionar informação sobre o limite
+    if (display) {
+        display.textContent += ` (${numerosSelecionados.length}/${maximoNumeros})`;
+    }
 }
 
-// Inicializar eventos após a página carregar
-document.addEventListener('DOMContentLoaded', function() {
-    // Atualizar configurações quando o jogo é selecionado
-    const jogoSelect = document.getElementById('jogo_id');
-    if (jogoSelect) {
-        jogoSelect.addEventListener('change', function() {
-            const option = this.options[this.selectedIndex];
-            if (option) {
-                minNumeros = parseInt(option.dataset.min) || 6;
-                maxNumeros = parseInt(option.dataset.max) || 15;
-                
-                // Limpar seleções ao mudar de jogo
-                numerosSelecionados = [];
-                document.querySelectorAll('.numero-item.selected').forEach(item => {
-                    item.classList.remove('selected');
-                });
-                atualizarNumerosDisplay();
-                
-                console.log(`Jogo alterado: min=${minNumeros}, max=${maxNumeros}`);
+// Função para limpar o formulário
+function limparFormulario() {
+    const form = document.getElementById('formSalvarResultado');
+    if (form) {
+        form.reset();
+        numerosSelecionados = [];
+        const display = document.getElementById('numeros-selecionados');
+        if (display) {
+            display.textContent = 'Nenhum';
+        }
+        
+        // Limpar seleção visual
+        const numerosGrid = document.getElementById('numeros-grid');
+        if (numerosGrid) {
+            const elementos = numerosGrid.getElementsByClassName('numero-item');
+            for (let i = 0; i < elementos.length; i++) {
+                elementos[i].classList.remove('selected');
             }
+        }
+        
+        // Atualizar configuração do jogo
+        atualizarConfiguracaoPorJogo();
+    }
+}
+
+// Função para salvar o resultado
+function salvarResultado() {
+    // Validar o formulário primeiro
+    if (!validarFormulario()) {
+        return;
+    }
+
+    // Mostrar carregamento
+    Swal.fire({
+        title: 'Salvando...',
+        html: 'Processando os dados. Por favor, aguarde.',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Preparar dados do formulário
+    const form = document.getElementById('formSalvarResultado');
+    if (!form) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro',
+            text: 'Formulário não encontrado'
         });
+        return;
     }
     
-    // Salvar resultado
-    const btnSalvarResultado = document.getElementById('btnSalvarResultado');
-    if (btnSalvarResultado) {
-        btnSalvarResultado.addEventListener('click', function() {
-            const form = document.getElementById('formInserirResultado');
-            if (!form) return;
-            
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                return;
-            }
-            
-            if (numerosSelecionados.length < minNumeros) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Números insuficientes',
-                    text: `Selecione pelo menos ${minNumeros} números!`
-                });
-                return;
-            }
-            
-            // Preparar dados do formulário
-            const formData = new FormData(form);
-            
-            // Enviar requisição
-            fetch('ajax/salvar_resultado.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Sucesso!',
-                        text: 'Resultado salvo com sucesso!'
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
-                    throw new Error(data.message || 'Erro ao salvar resultado');
+    const formData = new FormData(form);
+    
+    // Adicionar números selecionados ao formData
+    formData.set('numeros', numerosSelecionados.join(','));
+    
+    // Verificar se todos os campos necessários estão presentes
+    if (!formData.get('jogo_id') || !formData.get('concurso') || !formData.get('data_sorteio')) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Dados incompletos',
+            text: 'Por favor, preencha todos os campos obrigatórios'
+        });
+        return;
+    }
+    
+    // Log para debugging
+    console.log('Enviando dados:', Object.fromEntries(formData));
+    
+    // Enviar requisição AJAX
+    console.log('Enviando requisição para: ajax/salvar_resultado.php');
+    
+    fetch('ajax/salvar_resultado.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('Resposta recebida:', response);
+        if (!response.ok) {
+            throw new Error('Erro na resposta do servidor: ' + response.status);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Dados recebidos:', data);
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Sucesso!',
+                text: 'Resultado cadastrado com sucesso',
+                confirmButtonText: 'OK'
+            }).then(() => {
+                // Fechar o modal
+                const modal = document.getElementById('modalInserirResultado');
+                if (modal && typeof bootstrap !== 'undefined') {
+                    const modalInstance = bootstrap.Modal.getInstance(modal);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
                 }
-            })
-            .catch(error => {
+                
+                // Recarregar a página para mostrar o novo resultado
+                window.location.reload();
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: data.message || 'Ocorreu um erro ao salvar o resultado'
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Erro na requisição:', error);
+        
+        // Tentar novamente com caminho absoluto
+        console.log('Tentando novamente com caminho absoluto...');
+        
+        fetch('/revendedor/ajax/salvar_resultado.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            console.log('Resposta da segunda tentativa:', response);
+            if (!response.ok) {
+                throw new Error('Erro na resposta do servidor (2ª tentativa): ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Dados recebidos (2ª tentativa):', data);
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Sucesso!',
+                    text: 'Resultado cadastrado com sucesso',
+                    confirmButtonText: 'OK'
+                }).then(() => {
+                    const modal = document.getElementById('modalInserirResultado');
+                    if (modal && typeof bootstrap !== 'undefined') {
+                        const modalInstance = bootstrap.Modal.getInstance(modal);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
+                    }
+                    window.location.reload();
+                });
+            } else {
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro!',
-                    text: error.message
+                    text: data.message || 'Ocorreu um erro ao salvar o resultado'
                 });
+            }
+        })
+        .catch(secondError => {
+            console.error('Erro na segunda tentativa:', secondError);
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro!',
+                text: 'Ocorreu um erro ao processar a requisição. Detalhes no console.'
             });
         });
+    });
+}
+
+// Função para validar o formulário
+function validarFormulario() {
+    const form = document.getElementById('formSalvarResultado');
+    if (!form) return false;
+    
+    // Validar concurso
+    const concurso = form.elements['concurso'].value.trim();
+    if (!concurso) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro de validação',
+            text: 'Por favor, informe o número do concurso'
+        });
+        return false;
     }
-});
+    
+    // Validar data
+    const data = form.elements['data_sorteio'].value.trim();
+    if (!data) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro de validação',
+            text: 'Por favor, informe a data do sorteio'
+        });
+        return false;
+    }
+    
+    // Validar jogo selecionado
+    const jogoId = form.elements['jogo_id'].value;
+    if (!jogoId) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro de validação',
+            text: 'Por favor, selecione um jogo'
+        });
+        return false;
+    }
+    
+    // Validar números selecionados
+    if (numerosSelecionados.length !== maximoNumeros) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro de validação',
+            text: `Você precisa selecionar exatamente ${maximoNumeros} números para este jogo.`
+        });
+        return false;
+    }
+    
+    return true;
+}
 </script>
 
 <?php
