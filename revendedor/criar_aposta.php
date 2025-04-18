@@ -2,6 +2,9 @@
 require_once '../config/database.php';
 session_start();
 
+// Script para limpar o cache local no caso de problemas de visualização
+$cacheVersion = '1.0.1'; // Atualizar sempre que houver mudanças importantes
+
 // Verificar se é revendedor
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'revendedor') {
     header('Location: ../login.php');
@@ -24,6 +27,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         $valor_aposta = filter_input(INPUT_POST, 'valor_aposta', FILTER_VALIDATE_FLOAT);
         $valor_premio = filter_input(INPUT_POST, 'premio', FILTER_VALIDATE_FLOAT) ?: 0;
+        
+        // Validar valor da aposta
+        if ($valor_aposta === false || $valor_aposta <= 0) {
+            error_log("Valor da aposta inválido: " . print_r($_POST['valor_aposta'], true));
+            throw new Exception("Valor da aposta inválido");
+        }
+        
+        // Debug do valor do prêmio
+        if ($valor_premio === false) {
+            error_log("Valor do prêmio inválido: " . print_r($_POST['premio'], true));
+            $valor_premio = 0; // Fallback seguro
+        }
+        
+        // Validar a quantidade de números selecionados
+        $numerosArray = explode(',', $numeros);
+        if (count($numerosArray) > 20) {
+            throw new Exception("Quantidade de números selecionados excede o limite permitido (máximo 20)");
+        }
+        
+        // Buscar informações do jogo para validar
+        $stmt = $pdo->prepare("SELECT minimo_numeros, maximo_numeros FROM jogos WHERE id = ?");
+        $stmt->execute([$jogo_id]);
+        $jogo = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$jogo) {
+            throw new Exception("Jogo não encontrado");
+        }
+        
+        // Validar número mínimo de dezenas
+        if (count($numerosArray) < $jogo['minimo_numeros']) {
+            throw new Exception("Quantidade de números insuficiente. Mínimo: " . $jogo['minimo_numeros']);
+        }
+        
+        // Validar número máximo de dezenas (com limite absoluto de segurança)
+        $maxPermitido = min($jogo['maximo_numeros'], 20);
+        if (count($numerosArray) > $maxPermitido) {
+            throw new Exception("Quantidade de números excede o máximo permitido. Máximo: " . $maxPermitido);
+        }
+        
+        // Verificar se existem valores configurados para a quantidade de números selecionados
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM valores_jogos 
+            WHERE jogo_id = ? AND dezenas = ?
+        ");
+        $stmt->execute([$jogo_id, count($numerosArray)]);
+        
+        if ($stmt->fetchColumn() == 0) {
+            throw new Exception("Não existem valores configurados para " . count($numerosArray) . " números neste jogo");
+        }
         
         // Verificar se o cliente pertence ao revendedor
         $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE id = ? AND revendedor_id = ?");
@@ -121,9 +173,14 @@ ob_start();
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-plus-circle"></i> Nova Aposta
         </h1>
-        <a href="apostas.php" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Voltar
-        </a>
+        <div>
+            <button onclick="limparCacheLocal()" class="btn btn-warning btn-sm me-2" type="button">
+                <i class="fas fa-sync-alt"></i> Limpar Cache
+            </button>
+            <a href="apostas.php" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
     </div>
     
     <?php if (isset($mensagem)): ?>
@@ -271,6 +328,26 @@ ob_start();
 </style>
 
 <script>
+// Criar uma função de fallback para Swal caso a biblioteca não seja carregada
+if (typeof Swal === 'undefined') {
+    window.Swal = {
+        fire: function(options) {
+            if (options.title && options.text) {
+                alert(options.title + '\n\n' + options.text);
+            } else if (options.title) {
+                alert(options.title);
+            } else if (options.text) {
+                alert(options.text);
+            }
+            
+            // Retorna uma promise para simular o comportamento do SweetAlert2
+            return Promise.resolve({isConfirmed: false});
+        }
+    };
+    
+    console.warn('SweetAlert2 não está disponível. Usando fallback de alerta nativo.');
+}
+
 let numerosSelected = [];
 let minNumeros = 6; // Valor padrão
 let maxNumeros = 15; // Valor padrão
@@ -322,16 +399,56 @@ function toggleNumero(element, numero) {
     const index = numerosSelected.indexOf(numero);
     
     if (index === -1) {
+        // Define um limite máximo absoluto para evitar problemas
+        const limiteAbsoluto = 20;
+        const limiteEfetivo = Math.min(maxNumeros, limiteAbsoluto);
+        
         // Se o número não está selecionado e não atingimos o máximo, adicione-o
-        if (numerosSelected.length < maxNumeros) {
+        if (numerosSelected.length < limiteEfetivo) {
+            // Verificar se já temos um número excessivo que pode causar problemas
+            if (numerosSelected.length >= 15) { // valor arbitrário para aviso
+                // Verificar se existem valores para a quantidade atual + 1
+                const qtdFutura = numerosSelected.length + 1;
+                const existemValores = jogoAtual && valoresJogos[jogoAtual] && 
+                                      valoresJogos[jogoAtual].some(v => parseInt(v.dezenas) === qtdFutura);
+                
+                if (!existemValores) {
+                    // Alertar o usuário mas permitir continuar
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Atenção',
+                            text: `Você está selecionando ${qtdFutura} números, mas pode não haver valores configurados para essa quantidade.`,
+                            showCancelButton: true,
+                            confirmButtonText: 'Continuar mesmo assim',
+                            cancelButtonText: 'Cancelar'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                // Adicionar o número se o usuário confirmar
+                                numerosSelected.push(numero);
+                                element.classList.add('selected');
+                                atualizarDisplayNumeros();
+                            }
+                        });
+                        return; // Sair da função para evitar adicionar automaticamente
+                    }
+                }
+            }
+            
+            // Adicionar normalmente
             numerosSelected.push(numero);
             element.classList.add('selected');
         } else {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Limite atingido',
-                text: `Você só pode selecionar até ${maxNumeros} números!`
-            });
+            // Verifica se SweetAlert2 está disponível e usa alert como fallback
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Limite atingido',
+                    text: `Você só pode selecionar até ${limiteEfetivo} números!`
+                });
+            } else {
+                alert(`Limite atingido! Você só pode selecionar até ${limiteEfetivo} números!`);
+            }
         }
     } else {
         // Se o número já está selecionado, remova-o
@@ -425,12 +542,46 @@ function atualizarValoresDisponiveis(qtdNumeros) {
     
     if (!jogoAtual || !valoresJogos[jogoAtual]) return;
     
+    // Verificar se há valores configurados para o jogo atual
+    if (valoresJogos[jogoAtual].length === 0) {
+        valorSelect.innerHTML = '<option value="">Não há valores configurados para este jogo</option>';
+        
+        // Mostrar alerta ao usuário
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Configuração incompleta',
+                text: 'Não existem valores configurados para este jogo. Por favor, entre em contato com o administrador.'
+            });
+        } else {
+            alert('Não existem valores configurados para este jogo. Por favor, entre em contato com o administrador.');
+        }
+        return;
+    }
+    
     // Filtrar valores para a quantidade de números selecionados
     const valoresDisponiveis = valoresJogos[jogoAtual].filter(v => v.dezenas == qtdNumeros);
     
     if (valoresDisponiveis.length === 0) {
         // Não há valores para a quantidade de números selecionados
         valorSelect.innerHTML = '<option value="">Não disponível para esta quantidade</option>';
+        
+        // Se o usuário selecionou mais dezenas do que há configuração, mostrar um alerta mais específico
+        if (qtdNumeros > 20) { // assumindo que 20 é um limite razoável
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Muitos números selecionados',
+                    text: `Você selecionou ${qtdNumeros} números, mas não há valores configurados para essa quantidade. Selecione menos números.`,
+                    confirmButtonText: 'Entendi'
+                }).then(() => {
+                    // Sugestão: limitar a quantidade de números selecionáveis
+                    // limparSelecao(); // descomente esta linha se quiser limpar automaticamente
+                });
+            } else {
+                alert(`Você selecionou ${qtdNumeros} números, mas não há valores configurados para essa quantidade. Selecione menos números.`);
+            }
+        }
         return;
     }
     
@@ -477,34 +628,142 @@ function atualizarPremiacao() {
 }
 
 document.getElementById('formAposta').addEventListener('submit', function(e) {
+    // Sempre prevenir o envio inicialmente para fazer validações
+    e.preventDefault();
+    
+    // Verificação de número mínimo de números selecionados
     if (numerosSelected.length < minNumeros) {
-        e.preventDefault();
-        Swal.fire({
-            icon: 'error',
-            title: 'Números insuficientes',
-            text: `Você precisa selecionar pelo menos ${minNumeros} números!`
-        });
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Números insuficientes',
+                text: `Você precisa selecionar pelo menos ${minNumeros} números!`
+            });
+        } else {
+            alert(`Números insuficientes! Você precisa selecionar pelo menos ${minNumeros} números!`);
+        }
         return;
     }
     
-    const valorSelect = document.getElementById('valor_aposta');
-    if (valorSelect.value === '') {
-        e.preventDefault();
-        Swal.fire({
-            icon: 'error',
-            title: 'Valor não selecionado',
-            text: 'Por favor, selecione um valor para a aposta.'
-        });
+    // Verificação de limite máximo de números (20 é um limite razoável)
+    const limiteAbsoluto = 20;
+    if (numerosSelected.length > limiteAbsoluto) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Muitos números selecionados',
+                text: `Você selecionou ${numerosSelected.length} números, o máximo permitido é ${limiteAbsoluto}.`
+            });
+        } else {
+            alert(`Você selecionou ${numerosSelected.length} números, o máximo permitido é ${limiteAbsoluto}.`);
+        }
         return;
     }
+    
+    // Verificação de valor da aposta
+    const valorSelect = document.getElementById('valor_aposta');
+    if (valorSelect.value === '') {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'error',
+                title: 'Valor não selecionado',
+                text: 'Por favor, selecione um valor para a aposta.'
+            });
+        } else {
+            alert('Valor não selecionado! Por favor, selecione um valor para a aposta.');
+        }
+        return;
+    }
+    
+    // Verificar se existem valores configurados para a quantidade de números selecionados
+    if (jogoAtual && valoresJogos[jogoAtual]) {
+        const existemValores = valoresJogos[jogoAtual].some(v => parseInt(v.dezenas) === numerosSelected.length);
+        
+        if (!existemValores) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Configuração inválida',
+                    text: `Não existem valores configurados para ${numerosSelected.length} números. Por favor, selecione uma quantidade diferente.`
+                });
+            } else {
+                alert(`Não existem valores configurados para ${numerosSelected.length} números. Por favor, selecione uma quantidade diferente.`);
+            }
+            return;
+        }
+    }
+    
+    // Se passar por todas as validações, enviar o formulário
+    this.submit();
 });
 
 // Inicializar ao carregar a página
 window.addEventListener('DOMContentLoaded', function() {
+    // Verificar se há algo estranho salvo no localStorage
+    try {
+        const limiteAbsoluto = 20;
+        const possiveisChaves = ['numerosLotomania', 'numerosSelecionados', 'loteriaNumerosSelected'];
+        
+        possiveisChaves.forEach(chave => {
+            const valoresSalvos = localStorage.getItem(chave);
+            if (valoresSalvos) {
+                try {
+                    const valores = JSON.parse(valoresSalvos);
+                    if (Array.isArray(valores) && valores.length > limiteAbsoluto) {
+                        console.warn(`Detectada seleção excessiva armazenada em ${chave}. Limpando...`);
+                        localStorage.removeItem(chave);
+                    }
+                } catch (e) {
+                    // Se não conseguir analisar o JSON, remover para evitar problemas
+                    localStorage.removeItem(chave);
+                }
+            }
+        });
+    } catch (e) {
+        console.error("Erro ao verificar localStorage:", e);
+    }
+    
+    // Inicializações padrão
     atualizarGradeNumeros();
     carregarConfigJogo();
 });
+
+// Função para limpar o cache local
+function limparCacheLocal() {
+    if (window.caches) {
+        caches.keys().then(function(names) {
+            for (let name of names) {
+                caches.delete(name);
+            }
+        });
+    }
+    
+    // Limpar localStorage
+    localStorage.clear();
+    
+    // Limpar sessionStorage
+    sessionStorage.clear();
+    
+    // Recarregar página com limpeza de cache
+    location.reload(true);
+    
+    // Verifica se SweetAlert2 está disponível e usa alert como fallback
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            icon: 'success',
+            title: 'Cache Limpo',
+            text: 'O cache local foi limpo com sucesso. A página será recarregada.',
+            showConfirmButton: false,
+            timer: 2000
+        });
+    } else {
+        alert('Cache Limpo! O cache local foi limpo com sucesso. A página será recarregada.');
+    }
+}
 </script>
+
+<!-- Carregamento explícito do SweetAlert2 via CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <?php
 $content = ob_get_clean();

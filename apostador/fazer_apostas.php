@@ -149,7 +149,7 @@ ob_start();
 </div>
 
 <!-- Arquivos JavaScript -->
-<script src="assets/js/fazer-apostas.js"></script>
+<script src="assets/js/fazer-apostas.js?v=1.0.1"></script>
 <script>
     // Passar dados para o JavaScript
     const revendedorWhatsApp = "<?php echo htmlspecialchars($telefoneRevendedor ?? ''); ?>";

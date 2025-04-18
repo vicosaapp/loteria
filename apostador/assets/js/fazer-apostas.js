@@ -9,6 +9,9 @@ const jogosConfig = {
     'MM': { nome: 'Mais Milionária', minDezenas: 6, maxDezenas: 12, totalNumeros: 50 }
 };
 
+// Versão do arquivo para forçar a recarga do cache
+const APP_VERSION = '1.0.1';
+
 // Valores de apostas e premiação do Timemania
 const timemaniaValores = {
     20: [
@@ -384,14 +387,32 @@ const lotomaniaValores = {
     55: [
         { aposta: 1.00, premio: 15000.00 },
         { aposta: 1.50, premio: 22500.00 },
-        { aposta: 2.00, premio: 30000.00 }
+        { aposta: 2.00, premio: 30000.00 },
+        { aposta: 2.50, premio: 37500.00 },
+        { aposta: 3.00, premio: 45000.00 },
+        { aposta: 5.00, premio: 75000.00 },
+        { aposta: 7.00, premio: 105000.00 },
+        { aposta: 10.00, premio: 150000.00 },
+        { aposta: 15.00, premio: 225000.00 },
+        { aposta: 20.00, premio: 300000.00 },
+        { aposta: 25.00, premio: 375000.00 },
+        { aposta: 50.00, premio: 750000.00 },
+        { aposta: 100.00, premio: 1500000.00 }
     ],
     60: [
         { aposta: 1.00, premio: 10000.00 },
         { aposta: 1.50, premio: 15000.00 },
         { aposta: 2.00, premio: 20000.00 },
         { aposta: 2.50, premio: 25000.00 },
-        { aposta: 3.00, premio: 30000.00 }
+        { aposta: 3.00, premio: 30000.00 },
+        { aposta: 5.00, premio: 50000.00 },
+        { aposta: 7.00, premio: 70000.00 },
+        { aposta: 10.00, premio: 100000.00 },
+        { aposta: 15.00, premio: 150000.00 },
+        { aposta: 20.00, premio: 200000.00 },
+        { aposta: 25.00, premio: 250000.00 },
+        { aposta: 50.00, premio: 500000.00 },
+        { aposta: 100.00, premio: 1000000.00 }
     ],
     65: [
         { aposta: 1.00, premio: 2000.00 },
@@ -402,7 +423,11 @@ const lotomaniaValores = {
         { aposta: 5.00, premio: 10000.00 },
         { aposta: 7.00, premio: 14000.00 },
         { aposta: 10.00, premio: 20000.00 },
-        { aposta: 15.00, premio: 30000.00 }
+        { aposta: 15.00, premio: 30000.00 },
+        { aposta: 20.00, premio: 40000.00 },
+        { aposta: 25.00, premio: 50000.00 },
+        { aposta: 50.00, premio: 100000.00 },
+        { aposta: 100.00, premio: 200000.00 }
     ],
     70: [
         { aposta: 1.00, premio: 520.00 },
