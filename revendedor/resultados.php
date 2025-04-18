@@ -966,7 +966,8 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Botão para processar ganhadores
     document.getElementById('btnProcessarGanhadores').addEventListener('click', function() {
-        processarGanhadores();
+        // Redirecionar para a página de diagnóstico com a ação de processar
+        window.location.href = 'debug_ganhadores.php?acao=processar';
     });
     
     // Botões para processar ganhador individual

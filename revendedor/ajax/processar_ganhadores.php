@@ -1,151 +1,213 @@
 <?php
-require_once '../../config/database.php';
-session_start();
+// Habilitar exibição de erros para depuração
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-// Verificar se é uma requisição AJAX
-if (empty($_SERVER['HTTP_X_REQUESTED_WITH']) || strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) != 'xmlhttprequest') {
-    header('HTTP/1.1 403 Forbidden');
-    exit('Acesso negado');
-}
+// Incluir configuração do banco de dados
+require_once '../../config/database.php';
+
+// Iniciar a sessão
+session_start();
 
 // Verificar se é revendedor
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'revendedor') {
     header('Content-Type: application/json');
-    echo json_encode(['success' => false, 'message' => 'Acesso não autorizado']);
+    echo json_encode(['status' => 'error', 'message' => 'Acesso não autorizado']);
     exit;
 }
 
 header('Content-Type: application/json');
 
+// Array para logs detalhados
+$logs = [];
+$logs[] = "Iniciando processamento de ganhadores: " . date('Y-m-d H:i:s');
+
 try {
-    // Buscar apostas não processadas
-    $stmt = $pdo->prepare("
+    // Iniciar transação para garantir integridade dos dados
+    $pdo->beginTransaction();
+    
+    // 1. Obter todos os concursos finalizados com números sorteados
+    $sql = "
         SELECT 
-            a.id,
-            a.numeros,
-            a.tipo_jogo_id,
+            c.id as concurso_id,
+            c.codigo as concurso_codigo,
+            c.jogo_id,
             j.nome as jogo_nome,
-            j.api_nome,
-            j.identificador_api
-        FROM apostas a
-        INNER JOIN jogos j ON a.tipo_jogo_id = j.id
-        WHERE a.status = 'aprovada'
-        AND (a.processado = 0 OR a.processado IS NULL)
-    ");
+            GROUP_CONCAT(ns.numero ORDER BY ns.numero ASC) as numeros_sorteados
+        FROM concursos c
+        JOIN jogos j ON j.id = c.jogo_id
+        JOIN numeros_sorteados ns ON ns.concurso_id = c.id
+        WHERE c.status = 'finalizado'
+        GROUP BY c.id, c.codigo, c.jogo_id, j.nome
+        ORDER BY c.jogo_id, c.data_sorteio DESC
+    ";
     
-    $stmt->execute();
-    $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $logs[] = "Buscando concursos finalizados com números sorteados";
+    $stmt = $pdo->query($sql);
+    $concursos = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
-    if (empty($apostas)) {
+    if (empty($concursos)) {
+        $logs[] = "Nenhum concurso finalizado encontrado com números sorteados";
         echo json_encode([
-            'success' => true,
-            'message' => 'Não há apostas para processar'
+            'status' => 'warning',
+            'message' => 'Nenhum concurso finalizado encontrado',
+            'logs' => $logs
         ]);
         exit;
     }
     
-    $processadas = 0;
-    $erros = 0;
-    $logs = [];
+    $logs[] = "Encontrados " . count($concursos) . " concursos finalizados";
     
-    foreach ($apostas as $aposta) {
-        try {
-            // Buscar resultado mais recente da API
-            $url = "https://loteriascaixa-api.herokuapp.com/api/{$aposta['api_nome']}/latest";
-            
-            $opts = [
-                'http' => [
-                    'method' => 'GET',
-                    'header' => [
-                        'Accept: application/json',
-                        'User-Agent: Mozilla/5.0'
-                    ],
-                    'timeout' => 30
-                ],
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false
-                ]
+    // Processa cada concurso
+    $total_apostas_processadas = 0;
+    $total_ganhadores = 0;
+    
+    foreach ($concursos as $concurso) {
+        $logs[] = "Processando concurso {$concurso['concurso_codigo']} - {$concurso['jogo_nome']}";
+        
+        // Obtém os números sorteados
+        $numeros_sorteados = explode(',', $concurso['numeros_sorteados']);
+        $numeros_sorteados = array_map('intval', $numeros_sorteados);
+        
+        $logs[] = "Números sorteados: " . implode(', ', $numeros_sorteados);
+        
+        // 2. Obter todas as apostas não processadas para este jogo
+        $sql = "
+            SELECT 
+                a.id,
+                a.usuario_id,
+                a.numeros,
+                a.valor_aposta,
+                a.data_criacao,
+                u.nome as nome_usuario
+            FROM apostas a
+            JOIN usuarios u ON a.usuario_id = u.id
+            WHERE a.tipo_jogo_id = ? 
+            AND a.status = 'aprovada' 
+            AND (a.processado = 0 OR a.processado IS NULL)
+            AND a.concurso IS NULL
+        ";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$concurso['jogo_id']]);
+        $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $logs[] = "Encontradas " . count($apostas) . " apostas não processadas para este jogo";
+        
+        if (empty($apostas)) {
+            $logs[] = "Sem apostas para processar neste concurso";
+            continue;
+        }
+        
+        // Verificar valores de prêmios disponíveis para este jogo
+        $sql = "SELECT dezenas, valor_premio FROM valores_jogos WHERE jogo_id = ? ORDER BY dezenas DESC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$concurso['jogo_id']]);
+        $premios = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+        
+        if (empty($premios)) {
+            $logs[] = "ATENÇÃO: Não foram encontrados valores de prêmios para o jogo ID {$concurso['jogo_id']}";
+            // Criar valores padrão para prêmios
+            $premios = [
+                15 => 1000.00,
+                14 => 500.00,
+                13 => 250.00,
+                12 => 100.00,
+                11 => 50.00,
+                10 => 20.00,
+                9 => 10.00,
+                8 => 5.00,
+                7 => 2.50,
+                6 => 1.00
             ];
+            $logs[] = "Utilizando valores padrão para prêmios";
+        }
+        
+        // Processar cada aposta
+        foreach ($apostas as $aposta) {
+            $logs[] = "Processando aposta ID: {$aposta['id']} de {$aposta['nome_usuario']}";
             
-            $context = stream_context_create($opts);
-            $response = @file_get_contents($url, false, $context);
+            // Obter números da aposta
+            $numeros_apostados = explode(',', $aposta['numeros']);
+            $numeros_apostados = array_map('intval', array_map('trim', $numeros_apostados));
             
-            if ($response === false) {
-                throw new Exception("Erro ao buscar resultados da API para {$aposta['jogo_nome']}");
+            $logs[] = "Números apostados: " . implode(', ', $numeros_apostados);
+            
+            // Verificar acertos
+            $acertos = array_intersect($numeros_apostados, $numeros_sorteados);
+            $total_acertos = count($acertos);
+            
+            $logs[] = "Total de acertos: $total_acertos - Números acertados: " . implode(', ', $acertos);
+            
+            // Determinar o prêmio
+            $valor_premio = 0;
+            foreach ($premios as $acertos_necessarios => $premio) {
+                if ($total_acertos >= $acertos_necessarios) {
+                    $valor_premio = $premio;
+                    $logs[] = "Prêmio encontrado: R$ $valor_premio para $total_acertos acertos";
+                    break;
+                }
             }
             
-            $resultado = json_decode($response, true);
-            
-            if (!$resultado || !isset($resultado['dezenas'])) {
-                throw new Exception("Dados inválidos da API para {$aposta['jogo_nome']}");
-            }
-            
-            // Processar resultado
-            $dezenas_sorteadas = $resultado['dezenas'];
-            $numeros_aposta = explode(',', $aposta['numeros']);
-            
-            // Contar acertos
-            $acertos = count(array_intersect($dezenas_sorteadas, $numeros_aposta));
-            
-            // Buscar valor do prêmio baseado nos acertos
-            $stmt = $pdo->prepare("
-                SELECT valor_premio 
-                FROM valores_jogos 
-                WHERE jogo_id = ? 
-                AND quantidade_acertos = ?
-            ");
-            
-            $stmt->execute([$aposta['tipo_jogo_id'], $acertos]);
-            $valor_premio = $stmt->fetch(PDO::FETCH_COLUMN);
-            
-            // Atualizar aposta
-            $stmt = $pdo->prepare("
+            // Atualizar a aposta
+            $sql = "
                 UPDATE apostas 
                 SET 
-                    processado = 1,
-                    acertos = ?,
-                    valor_premio = ?,
-                    status = CASE 
-                        WHEN ? > 0 THEN 'premiada'
-                        ELSE 'nao_premiada'
-                    END,
                     concurso = ?,
-                    updated_at = NOW()
+                    valor_premio = ?,
+                    processado = 1
                 WHERE id = ?
-            ");
+            ";
             
-            $stmt->execute([
-                $acertos,
-                $valor_premio ?: 0,
-                $valor_premio ?: 0,
-                $resultado['concurso'],
+            $stmt = $pdo->prepare($sql);
+            $resultado = $stmt->execute([
+                $concurso['concurso_codigo'],
+                $valor_premio,
                 $aposta['id']
             ]);
             
-            $logs[] = "Aposta {$aposta['id']} processada: {$acertos} acertos, prêmio: R$ " . number_format($valor_premio ?: 0, 2, ',', '.');
-            $processadas++;
-            
-        } catch (Exception $e) {
-            $erros++;
-            $logs[] = "Erro ao processar aposta {$aposta['id']}: " . $e->getMessage();
-            error_log("Erro ao processar aposta {$aposta['id']}: " . $e->getMessage());
-            continue;
+            if ($resultado) {
+                $logs[] = "Aposta ID {$aposta['id']} atualizada com sucesso";
+                $total_apostas_processadas++;
+                
+                if ($valor_premio > 0) {
+                    $total_ganhadores++;
+                    $logs[] = "GANHADOR ENCONTRADO! Usuário: {$aposta['nome_usuario']}, Prêmio: R$ $valor_premio";
+                }
+            } else {
+                $logs[] = "ERRO ao atualizar aposta ID {$aposta['id']}";
+            }
         }
     }
     
-    echo json_encode([
-        'success' => true,
-        'message' => "Processamento concluído. Processadas: $processadas, Erros: $erros",
-        'processadas' => $processadas,
-        'erros' => $erros,
-        'logs' => $logs
-    ], JSON_UNESCAPED_UNICODE);
+    // Confirmar transação
+    $pdo->commit();
     
-} catch (Exception $e) {
-    error_log("Erro ao processar ganhadores: " . $e->getMessage());
+    // Resumo final
+    $logs[] = "Processamento concluído: " . date('Y-m-d H:i:s');
+    $logs[] = "Total de apostas processadas: $total_apostas_processadas";
+    $logs[] = "Total de ganhadores encontrados: $total_ganhadores";
+    
+    // Retornar resultado
     echo json_encode([
-        'success' => false,
-        'message' => "Erro ao processar ganhadores: " . $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
+        'status' => 'success',
+        'message' => "Processamento concluído com sucesso. Apostas processadas: $total_apostas_processadas, Ganhadores encontrados: $total_ganhadores",
+        'apostas_processadas' => $total_apostas_processadas,
+        'ganhadores' => $total_ganhadores,
+        'logs' => $logs
+    ]);
+
+} catch (Exception $e) {
+    // Reverter transação em caso de erro
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
+    
+    $logs[] = "ERRO: " . $e->getMessage();
+    
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Erro ao processar ganhadores: ' . $e->getMessage(),
+        'logs' => $logs
+    ]);
 } 
