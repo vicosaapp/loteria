@@ -1,3 +1,7 @@
+<?php
+// Verificar o modo de manutenção
+require_once __DIR__ . '/../../includes/verificar_manutencao.php';
+?>
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>

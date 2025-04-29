@@ -7,6 +7,14 @@ ini_set('display_errors', 1);
 $config_path = '../config/database.php';
 $layout_path = 'includes/layout.php';
 
+// Verificar o modo de manutenção
+require_once __DIR__ . '/verificar_manutencao.php';
+
+// Verificar se não há sessão ativa antes de iniciar
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 // Função para exibir erros de forma amigável
 function displayError($message) {
     echo "<!DOCTYPE html>
@@ -530,6 +538,22 @@ ob_start();
   <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalInserirResultado">
     <i class="fas fa-plus-circle me-2"></i>Inserir Novo Resultado
   </button>
+</div>
+
+<!-- Botões de ação -->
+<div class="mb-4 text-center">
+    <button id="btnProcessarGanhadores" class="btn btn-primary me-2">
+        <i class="fas fa-sync me-1"></i> Processar Ganhadores
+    </button>
+    <button id="btnProcessarApostasImportadas" class="btn btn-success me-2">
+        <i class="fas fa-file-import me-1"></i> Processar Apostas Importadas
+    </button>
+    <button id="btnAtualizarResultados" class="btn btn-info me-2">
+        <i class="fas fa-cloud-download-alt me-1"></i> Atualizar da API
+    </button>
+    <button id="btnCorrigirBD" class="btn btn-warning">
+        <i class="fas fa-tools me-1"></i> Corrigir Banco de Dados
+    </button>
 </div>
 
 <style>
@@ -1836,6 +1860,46 @@ function validarFormulario() {
     
     return true;
 }
+
+// Processar apostas importadas
+$('#btnProcessarApostasImportadas').on('click', function() {
+    $(this).prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i> Processando...');
+    
+    // Exibir modal de progresso
+    $('#processingModal').modal('show');
+    $('#processingLog').html('<p>Iniciando processamento de apostas importadas...</p>');
+    
+    $.ajax({
+        url: 'ajax/processar_ganhadores.php',
+        method: 'POST',
+        dataType: 'json',
+        success: function(response) {
+            if (response.success) {
+                $('#processingLog').append('<p class="text-success">Processamento concluído com sucesso!</p>');
+                
+                // Adicionar logs ao modal
+                if (response.logs && response.logs.length > 0) {
+                    $('#processingLog').append('<hr><h6>Detalhes do processamento:</h6>');
+                    response.logs.forEach(function(log) {
+                        $('#processingLog').append('<p>' + log + '</p>');
+                    });
+                }
+                
+                // Reativar botão e recarregar a página após alguns segundos
+                setTimeout(function() {
+                    window.location.reload();
+                }, 3000);
+            } else {
+                $('#processingLog').append('<p class="text-danger">Erro: ' + response.message + '</p>');
+                $('#btnProcessarApostasImportadas').prop('disabled', false).html('<i class="fas fa-file-import me-1"></i> Processar Apostas Importadas');
+            }
+        },
+        error: function(xhr, status, error) {
+            $('#processingLog').append('<p class="text-danger">Erro na requisição: ' + error + '</p>');
+            $('#btnProcessarApostasImportadas').prop('disabled', false).html('<i class="fas fa-file-import me-1"></i> Processar Apostas Importadas');
+        }
+    });
+});
 </script>
 
 <?php

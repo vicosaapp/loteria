@@ -1,4 +1,5 @@
 <?php
+require_once '../includes/verificar_manutencao.php';
 require_once '../config/database.php';
 require_once 'includes/header.php';
 
@@ -242,12 +243,88 @@ try {
             <h1><i class="fas fa-trophy"></i> Resultados Oficiais</h1>
             <p>Resultados oficiais das Loterias Caixa</p>
         </div>
-        <form method="post" class="d-inline">
-            <button type="submit" name="atualizar" class="btn-update">
-                <i class="fas fa-sync-alt"></i>
-                <span>Atualizar Resultados</span>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn-custom" data-bs-toggle="modal" data-bs-target="#modalInserirResultado">
+                <i class="fas fa-plus"></i>
+                <span>Inserir Manualmente</span>
             </button>
-        </form>
+            <form method="post" class="d-inline">
+                <button type="submit" name="atualizar" class="btn-update">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>Atualizar Resultados</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para inserir resultados manualmente -->
+    <div class="modal fade" id="modalInserirResultado" tabindex="-1" aria-labelledby="modalInserirResultadoLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalInserirResultadoLabel">Inserir Resultado Manualmente</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formInserirResultado">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="jogo_id" class="form-label">Jogo</label>
+                                <select class="form-select" id="jogo_id" name="jogo_id" required>
+                                    <option value="">Selecione o jogo</option>
+                                    <?php
+                                    // Buscar jogos do banco de dados
+                                    $stmt = $pdo->query("SELECT id, nome FROM jogos ORDER BY nome");
+                                    while ($jogo = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                                        echo '<option value="' . $jogo['id'] . '">' . htmlspecialchars($jogo['nome']) . '</option>';
+                                    }
+                                    ?>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="concurso" class="form-label">Número do Concurso</label>
+                                <input type="number" class="form-control" id="concurso" name="concurso" required min="1">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="data_sorteio" class="form-label">Data do Sorteio</label>
+                                <input type="datetime-local" class="form-control" id="data_sorteio" name="data_sorteio" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="valor_acumulado" class="form-label">Valor Acumulado (R$)</label>
+                                <input type="text" class="form-control" id="valor_acumulado" name="valor_acumulado" placeholder="0,00">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="data_proximo" class="form-label">Data do Próximo Sorteio</label>
+                                <input type="datetime-local" class="form-control" id="data_proximo" name="data_proximo">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="valor_estimado" class="form-label">Valor Estimado Próximo (R$)</label>
+                                <input type="text" class="form-control" id="valor_estimado" name="valor_estimado" placeholder="0,00">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Números Sorteados</label>
+                            <input type="hidden" name="numeros" id="numeros_selecionados">
+                            <div class="numeros-info mb-2">Números selecionados: <span id="contador_numeros">0/0</span></div>
+                            <div class="numeros-sorteaveis d-flex flex-wrap gap-2">
+                                <!-- Números serão inseridos via JavaScript -->
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnSalvarResultado">Salvar Resultado</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <?php if ($mensagem): ?>
@@ -871,6 +948,58 @@ body {
         font-size: 0.85rem;
     }
 }
+
+/* Estilos para o seletor de números */
+.numeros-sorteaveis {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.numero-item {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    border: 2px solid #ddd;
+}
+
+.numero-item:hover {
+    background-color: #e0e0e0;
+    transform: scale(1.05);
+}
+
+.numero-item.selected {
+    background-color: #0275d8;
+    color: white;
+    border-color: #0275d8;
+    transform: scale(1.1);
+}
+
+.btn-custom {
+    background: #4e73df;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.btn-custom:hover {
+    background: #2e59d9;
+    transform: translateY(-2px);
+}
 </style>
 
 <script>
@@ -959,4 +1088,59 @@ if (!document.querySelector('meta[name="theme-color"]')) {
     themeColor.content = '#2c3e50';
     document.head.appendChild(themeColor);
 }
-</script> 
+
+// Código JavaScript para o modal de inserção manual
+document.addEventListener('DOMContentLoaded', function() {
+    // Garantir que o botão para abrir o modal funcione corretamente
+    const btnInserirManualmente = document.querySelector('.btn-custom');
+    if (btnInserirManualmente) {
+        btnInserirManualmente.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Verificar se o Bootstrap está disponível
+            if (typeof bootstrap !== 'undefined') {
+                const modalElement = document.getElementById('modalInserirResultado');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                    
+                    // Inicializar data atual quando o modal é aberto
+                    const now = new Date();
+                    const dataFormatada = now.toISOString().slice(0, 16);
+                    document.getElementById('data_sorteio').value = dataFormatada;
+                    
+                    // Data próximo sorteio (7 dias depois)
+                    const nextWeek = new Date();
+                    nextWeek.setDate(nextWeek.getDate() + 7);
+                    document.getElementById('data_proximo').value = nextWeek.toISOString().slice(0, 16);
+                    
+                    // Inicializar grid de números
+                    atualizarGridNumeros();
+                } else {
+                    console.error('Modal element not found');
+                }
+            } else {
+                console.error('Bootstrap not found. Loading bootstrap.js...');
+                // Carregar Bootstrap se não estiver disponível
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js';
+                script.integrity = 'sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4';
+                script.crossOrigin = 'anonymous';
+                script.onload = function() {
+                    const modalElement = document.getElementById('modalInserirResultado');
+                    if (modalElement) {
+                        const modal = new bootstrap.Modal(modalElement);
+                        modal.show();
+                    }
+                };
+                document.head.appendChild(script);
+            }
+        });
+    } else {
+        console.error('Insert button not found');
+    }
+});
+</script>
+
+</body>
+</html> 

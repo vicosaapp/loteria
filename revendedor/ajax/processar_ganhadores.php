@@ -71,28 +71,19 @@ try {
         
         $logs[] = "Números sorteados: " . implode(', ', $numeros_sorteados);
         
-        // 2. Obter todas as apostas não processadas para este jogo
-        $sql = "
-            SELECT 
-                a.id,
-                a.usuario_id,
-                a.numeros,
-                a.valor_aposta,
-                a.data_criacao,
-                u.nome as nome_usuario
-            FROM apostas a
-            JOIN usuarios u ON a.usuario_id = u.id
-            WHERE a.tipo_jogo_id = ? 
-            AND a.status = 'aprovada' 
-            AND (a.processado = 0 OR a.processado IS NULL)
-            AND a.concurso IS NULL
-        ";
+        // Buscar apostas deste jogo
+        $sql = "SELECT ai.id, ai.numeros, ai.usuario_id, u.nome as nome_usuario, ai.jogo_nome
+                FROM apostas_importadas ai
+                INNER JOIN usuarios u ON u.id = ai.usuario_id
+                WHERE ai.jogo_nome LIKE CONCAT('%', ?) 
+                AND ai.concurso = ?
+                AND (ai.processado = 0 OR ai.processado IS NULL)";
         
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$concurso['jogo_id']]);
+        $stmt->execute([$concurso['jogo_nome'], $concurso['concurso_codigo']]);
         $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        $logs[] = "Encontradas " . count($apostas) . " apostas não processadas para este jogo";
+        $logs[] = "Encontradas " . count($apostas) . " apostas para verificar";
         
         if (empty($apostas)) {
             $logs[] = "Sem apostas para processar neste concurso";
@@ -127,31 +118,56 @@ try {
         foreach ($apostas as $aposta) {
             $logs[] = "Processando aposta ID: {$aposta['id']} de {$aposta['nome_usuario']}";
             
-            // Obter números da aposta
-            $numeros_apostados = explode(',', $aposta['numeros']);
-            $numeros_apostados = array_map('intval', array_map('trim', $numeros_apostados));
+            // Verificar se a aposta possui numeros
+            if (empty($aposta['numeros'])) {
+                $logs[] = "Aposta ID " . $aposta['id'] . " não possui números apostados. Pulando...";
+                continue;
+            }
             
-            $logs[] = "Números apostados: " . implode(', ', $numeros_apostados);
+            // Processar o texto da aposta para encontrar os números
+            $linhas = explode("\n", $aposta['numeros']);
+            $logs[] = "Aposta possui " . count($linhas) . " linhas";
             
-            // Verificar acertos
-            $acertos = array_intersect($numeros_apostados, $numeros_sorteados);
-            $total_acertos = count($acertos);
+            // Primeira linha contém o nome do jogo, vamos ignorá-la
+            if (count($linhas) > 1) {
+                array_shift($linhas);
+                
+                // A primeira linha (agora) contém os números apostados
+                $primeira_aposta = trim($linhas[0]);
+                $logs[] = "Primeira linha de números: " . $primeira_aposta;
+                
+                // Extrai todos os números da primeira linha
+                preg_match_all('/\d+/', $primeira_aposta, $matches);
+                $numeros_apostados = $matches[0];
+                
+                if (empty($numeros_apostados)) {
+                    $logs[] = "Não foi possível extrair números válidos da aposta ID " . $aposta['id'] . ". Pulando...";
+                    continue;
+                }
+                
+                $logs[] = "Números apostados extraídos: " . implode(', ', $numeros_apostados);
+            } else {
+                $logs[] = "Formato de aposta inválido para ID " . $aposta['id'] . ". Pulando...";
+                continue;
+            }
             
-            $logs[] = "Total de acertos: $total_acertos - Números acertados: " . implode(', ', $acertos);
+            // Contar acertos
+            $acertos = count(array_intersect($numeros_apostados, $numeros_sorteados));
+            $logs[] = "Aposta ID " . $aposta['id'] . " teve " . $acertos . " acertos";
             
             // Determinar o prêmio
             $valor_premio = 0;
             foreach ($premios as $acertos_necessarios => $premio) {
-                if ($total_acertos >= $acertos_necessarios) {
+                if ($acertos >= $acertos_necessarios) {
                     $valor_premio = $premio;
-                    $logs[] = "Prêmio encontrado: R$ $valor_premio para $total_acertos acertos";
+                    $logs[] = "Prêmio encontrado: R$ $valor_premio para $acertos acertos";
                     break;
                 }
             }
             
             // Atualizar a aposta
             $sql = "
-                UPDATE apostas 
+                UPDATE apostas_importadas 
                 SET 
                     concurso = ?,
                     valor_premio = ?,

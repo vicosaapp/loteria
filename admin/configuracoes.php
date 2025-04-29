@@ -1,6 +1,7 @@
 <?php
 require_once 'includes/header.php';
 require_once '../config/database.php';
+require_once '../includes/verificar_manutencao.php';
 
 // Verifica se é admin
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
@@ -42,6 +43,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $mensagem = "Configurações de pausa salvas com sucesso!";
             $tipo_mensagem = "success";
+        } elseif (isset($_POST['salvar_manutencao'])) {
+            $modo_manutencao = isset($_POST['modo_manutencao']) ? 1 : 0;
+            $mensagem_manutencao = $_POST['mensagem_manutencao'];
+            
+            // Atualizar configurações de manutenção
+            $stmt = $pdo->prepare("
+                UPDATE configuracoes SET 
+                    modo_manutencao = ?,
+                    mensagem_manutencao = ?
+                WHERE id = 1
+            ");
+
+            $stmt->execute([
+                $modo_manutencao,
+                $mensagem_manutencao
+            ]);
+
+            $mensagem = "Configurações de manutenção salvas com sucesso!";
+            $tipo_mensagem = "success";
         }
     } catch (Exception $e) {
         $mensagem = "Erro ao salvar as configurações: " . $e->getMessage();
@@ -52,6 +72,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Buscar configurações atuais
 $stmt = $pdo->query("SELECT * FROM configuracoes WHERE id = 1");
 $config = $stmt->fetch(PDO::FETCH_ASSOC);
+
+// Se não existir configuração, criar uma padrão
+if (!$config) {
+    $pdo->exec("
+        INSERT INTO configuracoes (
+            id, status_apostas, horario_inicio, horario_fim, 
+            dias_semana, motivo_pausa, modo_manutencao, mensagem_manutencao
+        ) VALUES (
+            1, 1, '23:00', '06:00', '', '', 0, 'Sistema em manutenção. Por favor, tente novamente mais tarde.'
+        )
+    ");
+    
+    $stmt = $pdo->query("SELECT * FROM configuracoes WHERE id = 1");
+    $config = $stmt->fetch(PDO::FETCH_ASSOC);
+}
 
 // Array com os dias da semana
 $dias_semana = [
@@ -66,13 +101,32 @@ $dias_semana = [
 
 // Converter string de dias em array
 $dias_selecionados = !empty($config['dias_semana']) ? explode(',', $config['dias_semana']) : [];
+
+// Verificação direta de manutenção
+try {
+    $stmt = $pdo->query("SELECT modo_manutencao FROM configuracoes WHERE id = 1");
+    $config = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    $isAdmin = isset($_SESSION['tipo']) && $_SESSION['tipo'] === 'admin';
+    
+    if (isset($config['modo_manutencao']) && $config['modo_manutencao'] == 1 && !$isAdmin) {
+        header("Location: /manutencao.php");
+        exit;
+    }
+} catch (Exception $e) {
+    // Se houver erro, continuar sem verificação
+}
 ?>
 
 <div class="container-fluid">
     <div class="page-header">
         <div class="header-content">
-            <h1><i class="fas fa-pause-circle"></i> Controle de Pausas</h1>
-            <p>Configure as pausas automáticas do sistema</p>
+            <h1><i class="fas fa-cogs"></i> Configurações do Sistema</h1>
+            <p>Gerencie as configurações globais do sistema</p>
         </div>
     </div>
 
@@ -82,77 +136,55 @@ $dias_selecionados = !empty($config['dias_semana']) ? explode(',', $config['dias
         </div>
     <?php endif; ?>
 
-    <form method="POST" action="">
-        <div class="card">
-            <div class="card-header">
-                <h3>Controle de Pausas nas Apostas</h3>
-            </div>
-            <div class="card-body">
-                <div class="form-section">
-                    <div class="form-group">
-                        <label class="control-label">Status das Apostas</label>
-                        <div class="custom-control custom-switch">
-                            <input type="checkbox" class="custom-control-input" id="status_apostas" 
-                                   name="status_apostas" <?php echo ($config['status_apostas'] ?? 1) ? 'checked' : ''; ?>>
-                            <label class="custom-control-label" for="status_apostas">
-                                <span class="status-text">
-                                    <?php echo ($config['status_apostas'] ?? 1) ? 'Apostas Liberadas' : 'Apostas Pausadas'; ?>
-                                </span>
-                            </label>
-                        </div>
+ 
+        
+        <div class="col-md-6">
+            <!-- MODO MANUTENÇÃO -->
+            <form method="POST" action="">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h3><i class="fas fa-tools"></i> Modo Manutenção</h3>
                     </div>
-
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Horário de Início da Pausa</label>
-                            <input type="time" class="form-control" name="horario_inicio" 
-                                   value="<?php echo $config['horario_inicio'] ?? '23:00'; ?>" required>
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label>Horário de Fim da Pausa</label>
-                            <input type="time" class="form-control" name="horario_fim" 
-                                   value="<?php echo $config['horario_fim'] ?? '06:00'; ?>" required>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Dias da Semana para Pausa</label>
-                        <div class="dias-semana-grid">
-                            <?php foreach ($dias_semana as $valor => $dia): ?>
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" 
-                                           id="dia_<?php echo $valor; ?>" 
-                                           name="dias_semana[]" 
-                                           value="<?php echo $valor; ?>"
-                                           <?php echo in_array($valor, $dias_selecionados) ? 'checked' : ''; ?>>
-                                    <label class="custom-control-label" for="dia_<?php echo $valor; ?>">
-                                        <?php echo $dia; ?>
+                    <div class="card-body">
+                        <div class="form-section">
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> Atenção: Ativar o modo de manutenção bloqueará o acesso de todos os usuários, exceto administradores.
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="control-label">Ativar Modo Manutenção</label>
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="modo_manutencao" 
+                                           name="modo_manutencao" <?php echo ($config['modo_manutencao'] ?? 0) ? 'checked' : ''; ?>>
+                                    <label class="custom-control-label" for="modo_manutencao">
+                                        <span class="status-text">
+                                            <?php echo ($config['modo_manutencao'] ?? 0) ? 'Manutenção Ativa' : 'Manutenção Desativada'; ?>
+                                        </span>
                                     </label>
                                 </div>
-                            <?php endforeach; ?>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Mensagem de Manutenção</label>
+                                <textarea class="form-control" name="mensagem_manutencao" rows="4" 
+                                          placeholder="Informe a mensagem que será exibida durante a manutenção"><?php echo $config['mensagem_manutencao'] ?? 'Sistema em manutenção. Por favor, tente novamente mais tarde.'; ?></textarea>
+                            </div>
+                        </div>
+                        <div class="form-actions text-center">
+                            <button type="submit" name="salvar_manutencao" class="btn btn-warning">
+                                <i class="fas fa-save"></i> Salvar Configurações de Manutenção
+                            </button>
                         </div>
                     </div>
-
-                    <div class="form-group">
-                        <label>Motivo da Pausa</label>
-                        <textarea class="form-control" name="motivo_pausa" rows="3" 
-                                  placeholder="Informe o motivo da pausa que será exibido aos usuários"><?php echo $config['motivo_pausa'] ?? ''; ?></textarea>
-                    </div>
                 </div>
-            </div>
+            </form>
         </div>
-
-        <div class="form-actions">
-            <button type="submit" name="salvar_pausa" class="btn btn-primary">
-                <i class="fas fa-save"></i> Salvar Configurações
-            </button>
-        </div>
-    </form>
+    </div>
 </div>
 
 <style>
 .card {
-    margin: 20px;
+    margin-bottom: 20px;
     border-radius: 10px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -164,9 +196,19 @@ $dias_selecionados = !empty($config['dias_semana']) ? explode(',', $config['dias
     border-radius: 10px 10px 0 0;
 }
 
+.card-header.bg-warning {
+    background: linear-gradient(135deg, #f6c23e 0%, #f4b619 100%);
+}
+
 .card-header h3 {
     margin: 0;
     font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+}
+
+.card-header h3 i {
+    margin-right: 10px;
 }
 
 .card-body {
@@ -213,20 +255,12 @@ $dias_selecionados = !empty($config['dias_semana']) ? explode(',', $config['dias
 }
 
 .form-actions {
-    margin: 20px;
-    padding: 20px;
-    background: white;
-    border-radius: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    text-align: center;
+    margin-top: 20px;
 }
 
-.btn-primary {
-    background: #4e73df;
-    border: none;
-    padding: 12px 30px;
+.btn {
+    padding: 10px 20px;
     border-radius: 5px;
-    color: white;
     font-weight: 600;
     display: inline-flex;
     align-items: center;
@@ -234,13 +268,22 @@ $dias_selecionados = !empty($config['dias_semana']) ? explode(',', $config['dias
     transition: all 0.3s ease;
 }
 
-.btn-primary:hover {
-    background: #2e59d9;
+.btn:hover {
     transform: translateY(-1px);
 }
 
+.btn-primary {
+    background: #4e73df;
+    border: none;
+}
+
+.btn-warning {
+    background: #f6c23e;
+    border: none;
+    color: #212529;
+}
+
 .alert {
-    margin: 20px;
     border-radius: 10px;
 }
 
@@ -248,17 +291,81 @@ textarea.form-control {
     resize: vertical;
     min-height: 100px;
 }
+
+.page-header {
+    margin-bottom: 20px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-content h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.8rem;
+    color: #4e73df;
+}
+
+.header-content p {
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+@media (max-width: 768px) {
+    .card {
+        margin-bottom: 15px;
+    }
+    
+    .form-section {
+        padding: 15px;
+    }
+    
+    .dias-semana-grid {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    }
+}
 </style>
 
 <script>
+// Atualizar texto do status quando o switch for alterado
 document.addEventListener('DOMContentLoaded', function() {
-    // Atualizar texto do status quando mudar
-    const statusSwitch = document.getElementById('status_apostas');
-    const statusText = document.querySelector('.status-text');
+    // Para o status de apostas
+    const statusApostasSwitch = document.getElementById('status_apostas');
+    if (statusApostasSwitch) {
+        statusApostasSwitch.addEventListener('change', function() {
+            const statusText = this.nextElementSibling.querySelector('.status-text');
+            statusText.textContent = this.checked ? 'Apostas Liberadas' : 'Apostas Pausadas';
+        });
+    }
     
-    statusSwitch.addEventListener('change', function() {
-        statusText.textContent = this.checked ? 'Apostas Liberadas' : 'Apostas Pausadas';
-    });
+    // Para o modo manutenção
+    const modoManutencaoSwitch = document.getElementById('modo_manutencao');
+    if (modoManutencaoSwitch) {
+        modoManutencaoSwitch.addEventListener('change', function() {
+            const statusText = this.nextElementSibling.querySelector('.status-text');
+            statusText.textContent = this.checked ? 'Manutenção Ativa' : 'Manutenção Desativada';
+            
+            if (this.checked) {
+                Swal.fire({
+                    title: 'Atenção!',
+                    text: 'Ativar o modo de manutenção bloqueará o acesso a todos os usuários exceto administradores. Deseja continuar?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#f6c23e',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Sim, ativar manutenção',
+                    cancelButtonText: 'Cancelar'
+                }).then((result) => {
+                    if (!result.isConfirmed) {
+                        this.checked = false;
+                        statusText.textContent = 'Manutenção Desativada';
+                    }
+                });
+            }
+        });
+    }
 });
 </script>
 

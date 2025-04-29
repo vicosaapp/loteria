@@ -5,7 +5,14 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once '../config/database.php';
-session_start();
+
+// Verificar o modo de manutenção
+require_once __DIR__ . '/verificar_manutencao.php';
+
+// Verificar se não há sessão ativa antes de iniciar
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Verificar se é revendedor
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'revendedor') {
@@ -19,6 +26,21 @@ error_log("Página de apostas carregada pelo revendedor ID: " . $_SESSION['usuar
 // Processar filtros
 $where = "WHERE u.revendedor_id = ?";
 $params = [$_SESSION['usuario_id']];
+
+// Adicionar filtro para últimas apostas (se recentes=true na URL)
+if (isset($_GET['recentes']) && $_GET['recentes'] == 'true') {
+    // Obter timestamp das últimas 24 horas
+    $ultimas24h = date('Y-m-d H:i:s', strtotime('-24 hours'));
+    $where .= " AND a.created_at >= ?";
+    $params[] = $ultimas24h;
+}
+
+if (isset($_GET['ultimas']) && is_numeric($_GET['ultimas'])) {
+    $limite = (int)$_GET['ultimas'];
+    $limite = min(max($limite, 1), 100); // Limitar entre 1 e 100
+} else {
+    $limite = 50; // Valor padrão
+}
 
 if (isset($_GET['data_inicio']) && !empty($_GET['data_inicio'])) {
     $where .= " AND DATE(a.created_at) >= ?";
@@ -41,24 +63,55 @@ if (isset($_GET['status']) && !empty($_GET['status'])) {
 }
 
 try {
-    // Buscar apostas com filtros
-    $stmt = $pdo->prepare("
+    // Log dos parâmetros de filtro para depuração
+    error_log("Filtros: " . json_encode([
+        'revendedor_id' => $_SESSION['usuario_id'],
+        'ultimas' => $_GET['ultimas'] ?? 'não definido',
+        'recentes' => $_GET['recentes'] ?? 'não definido',
+        'data_inicio' => $_GET['data_inicio'] ?? 'não definido',
+        'data_fim' => $_GET['data_fim'] ?? 'não definido',
+        'cliente' => $_GET['cliente'] ?? 'não definido',
+        'status' => $_GET['status'] ?? 'não definido'
+    ]));
+    
+    // Consulta simplificada para apostas manuais
+    $baseQuery = "
         SELECT 
             a.*,
             u.nome as nome_apostador,
-            j.nome as nome_jogo,
-            j.valor as valor_minimo,
-            j.premio as premio_maximo,
-            COALESCE(a.valor_premio, 0) as valor_premio
+            j.nome as nome_jogo
         FROM apostas a
         JOIN usuarios u ON a.usuario_id = u.id
         JOIN jogos j ON a.tipo_jogo_id = j.id
         $where
         ORDER BY a.created_at DESC
-    ");
+    ";
+    
+    // Se o parâmetro 'ultimas' estiver presente, simplificar a consulta
+    if (isset($_GET['ultimas']) && is_numeric($_GET['ultimas'])) {
+        $ultimas = (int)$_GET['ultimas'];
+        $query = $baseQuery . " LIMIT " . $ultimas;
+    } else {
+        $query = $baseQuery . " LIMIT " . $limite;
+    }
+    
+    error_log("Executando consulta: $query");
+    error_log("Parâmetros da consulta: " . json_encode($params));
+    
+    $stmt = $pdo->prepare($query);
     $stmt->execute($params);
     $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    error_log("Número de apostas encontradas: " . count($apostas));
 
+    // Para cada aposta, definir valor_premio caso não exista
+    foreach ($apostas as &$aposta) {
+        if (!isset($aposta['valor_premio']) || $aposta['valor_premio'] === null) {
+            $aposta['valor_premio'] = 0;
+        }
+    }
+    unset($aposta);
+    
     // Buscar clientes para o filtro
     $stmt = $pdo->prepare("
         SELECT id, nome 
@@ -75,32 +128,63 @@ try {
     $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Buscar apostas importadas do revendedor atual
-    $stmt = $pdo->prepare("
-        SELECT 
-            ai.id,
-            ai.usuario_id,
-            ai.jogo_nome,
-            ai.numeros,
-            ai.valor_aposta,
-            ai.valor_premio as valor_premio,
-            ai.created_at,
-            u.nome as apostador_nome,
-            ai.whatsapp
-        FROM 
-            apostas_importadas ai
-            INNER JOIN usuarios u ON ai.usuario_id = u.id
-        WHERE 
-            ai.revendedor_id = ?
-        ORDER BY 
-            ai.created_at DESC
-    ");
-    $stmt->execute([$_SESSION['usuario_id']]);
-    $apostas_importadas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $stmt = $pdo->prepare("
+            SELECT 
+                ai.id,
+                ai.usuario_id,
+                ai.jogo_nome,
+                ai.numeros,
+                ai.valor_aposta,
+                ai.valor_premio,
+                ai.created_at,
+                u.nome as apostador_nome,
+                ai.whatsapp
+            FROM 
+                apostas_importadas ai
+                INNER JOIN usuarios u ON ai.usuario_id = u.id
+            WHERE 
+                ai.revendedor_id = ?
+            ORDER BY 
+                ai.created_at DESC
+            LIMIT ?
+        ");
+        
+        // Se o parâmetro 'ultimas' estiver presente, usar esse valor como limite
+        $limite_importadas = isset($_GET['ultimas']) && is_numeric($_GET['ultimas']) ? 
+                            (int)$_GET['ultimas'] : 
+                            50; // Valor padrão
+        
+        $stmt->execute([$_SESSION['usuario_id'], $limite_importadas]);
+        $apostas_importadas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        error_log("Número de apostas importadas encontradas: " . count($apostas_importadas));
+    } catch (Exception $e) {
+        error_log("Erro ao buscar apostas importadas: " . $e->getMessage());
+        // Não definir a variável de erro para não mostrar a mensagem
+        $apostas_importadas = [];
+    }
+    
+    // Para cada aposta importada, definir valores padrão
+    foreach ($apostas_importadas as &$aposta) {
+        // Garantir que valor_premio seja um número
+        if (!isset($aposta['valor_premio']) || $aposta['valor_premio'] === null) {
+            $aposta['valor_premio'] = 0;
+        }
+    }
+    unset($aposta); // Importante: quebrar a referência do foreach
 
 } catch (Exception $e) {
     error_log("Erro ao buscar apostas: " . $e->getMessage());
     $error = "Erro ao carregar os dados. Por favor, tente novamente.";
+    // Inicializar apostas como array vazio para evitar erros de undefined
+    $apostas = [];
+    $apostas_importadas = [];
 }
+
+// Garantir que as variáveis estejam definidas mesmo em caso de erro
+if (!isset($apostas)) $apostas = [];
+if (!isset($apostas_importadas)) $apostas_importadas = [];
 
 // Define a página atual
 $currentPage = 'apostas';
@@ -115,17 +199,35 @@ ob_start();
         <h1 class="h3 mb-0 text-gray-800">
             <i class="fas fa-ticket-alt"></i> Apostas Manuais
         </h1>
-        <a href="criar_aposta.php" class="btn btn-success">
-            <i class="fas fa-plus"></i> Nova Aposta
-        </a>
+        <div>
+            <a href="criar_aposta.php" class="btn btn-success me-2">
+                <i class="fas fa-plus"></i> Nova Aposta
+            </a>
+            <a href="importar_apostas.php" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Importar Aposta
+            </a>
+        </div>
     </div>
 
-    <!-- Filtros -->
- 
+    <?php if (isset($_GET['ultimas'])): ?>
+    <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <i class="fas fa-filter me-2"></i> <strong>Filtro aplicado:</strong> Mostrando apenas as <?php echo htmlspecialchars($_GET['ultimas']); ?> apostas mais recentes
+        </div>
+        <a href="apostas.php" class="btn btn-outline-info">
+            <i class="fas fa-times"></i> Remover filtro
+        </a>
+    </div>
+    <?php endif; ?>
 
     <!-- Lista de Apostas -->
     <div class="card shadow-sm">
         <div class="card-body p-0">
+            <?php if (empty($apostas)): ?>
+                <div class="alert alert-info m-3">
+                    Nenhuma aposta manual encontrada.
+                </div>
+            <?php else: ?>
             <div class="table-responsive">
                 <table class="table table-striped">
                     <thead>
@@ -209,6 +311,7 @@ ob_start();
                     </tbody>
                 </table>
             </div>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -273,148 +376,24 @@ ob_start();
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-ticket-alt"></i> Apostas Importadas
         </h1>
-        <a href="importar_apostas.php" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Importar Aposta
+    </div>
+
+    <?php if (isset($_GET['ultimas'])): ?>
+    <div class="alert alert-info d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <i class="fas fa-filter me-2"></i> <strong>Filtro aplicado:</strong> Mostrando apenas as <?php echo htmlspecialchars($_GET['ultimas']); ?> apostas mais recentes
+        </div>
+        <a href="apostas.php" class="btn btn-outline-info">
+            <i class="fas fa-times"></i> Remover filtro
         </a>
     </div>
-
-    <?php if (isset($error)): ?>
-        <div class="alert alert-danger"><?php echo $error; ?></div>
     <?php endif; ?>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <?php if (empty($apostas_importadas)): ?>
-                <div class="alert alert-info">
-                    Nenhuma aposta encontrada.
-                </div>
-            <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Apostador</th>
-                                <th>WhatsApp</th>
-                                <th>Jogo</th>
-                                <th>Números</th>
-                                <th>Valor Aposta</th>
-                                <th>Valor Prêmio</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($apostas_importadas as $aposta): ?>
-                                <tr class="<?php echo $aposta['valor_premio'] > 0 ? 'aposta-premiada' : ''; ?>">
-                                    <td><?php echo date('d/m/Y H:i', strtotime($aposta['created_at'])); ?></td>
-                                    <td><?php echo htmlspecialchars($aposta['apostador_nome']); ?></td>
-                                    <td>
-                                        <?php if ($aposta['whatsapp']): ?>
-                                            <a href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $aposta['whatsapp']); ?>" 
-                                               target="_blank" 
-                                               class="btn btn-sm btn-success">
-                                                <i class="fab fa-whatsapp"></i>
-                                            </a>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?php echo htmlspecialchars($aposta['jogo_nome']); ?></td>
-                                    <td>
-                                        <button type="button" 
-                                                class="btn btn-sm btn-info" 
-                                                data-bs-toggle="modal" 
-                                                data-bs-target="#modalNumeros<?php echo $aposta['id']; ?>">
-                                            Ver números
-                                        </button>
-                                    </td>
-                                    <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
-                                    <td class="<?php echo $aposta['valor_premio'] > 0 ? 'text-premio' : ''; ?>">
-                                        <?php if ($aposta['valor_premio'] > 0): ?>
-                                            <div class="premio-container">
-                                                <div>R$ <?php echo number_format($aposta['valor_premio'], 2, ',', '.'); ?></div>
-                                                <span class="badge-premio"><i class="fas fa-trophy"></i></span>
-                                            </div>
-                                        <?php else: ?>
-                                            R$ 0,00
-                                        <?php endif; ?>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group">
-                                        <button type="button" 
-                                                class="btn btn-sm btn-danger"
-                                                onclick="confirmarExclusao(<?php echo $aposta['id']; ?>)">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                            <a class="btn btn-sm btn-info" 
-                                               href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo rawurlencode($aposta['jogo_nome']); ?>&aposta_id=<?php echo $aposta['id']; ?>" 
-                                               target="_blank">
-                                                <i class="fas fa-file-alt"></i> Comprovante
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
 
-                                <!-- Modal para exibir os números -->
-                                <div class="modal fade" id="modalNumeros<?php echo $aposta['id']; ?>" tabindex="-1">
-                                    <div class="modal-dialog modal-lg">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title">Números da Aposta</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <?php
-                                                // Formatação dos números para visualização mais amigável
-                                                // Tenta extrair os números do texto completo
-                                                $numeros_texto = $aposta['numeros'];
-                                                $numeros_extraidos = [];
-                                                
-                                                // Se tiver quebras de linha, pode ser um formato de importação
-                                                if (strpos($numeros_texto, "\n") !== false) {
-                                                    $linhas = explode("\n", $numeros_texto);
-                                                    // Ignorar a primeira linha (título do jogo)
-                                                    if (count($linhas) > 1) {
-                                                        array_shift($linhas);
-                                                        foreach ($linhas as $linha) {
-                                                            if (preg_match_all('/\d+/', $linha, $matches)) {
-                                                                $numeros_extraidos = array_merge($numeros_extraidos, $matches[0]);
-                                                            }
-                                                        }
-                                                    }
-                                                } else {
-                                                    // Tentar extrair números com expressão regular
-                                                    preg_match_all('/\d+/', $numeros_texto, $matches);
-                                                    $numeros_extraidos = $matches[0];
-                                                }
-                                                
-                                                // Garantir que não há duplicatas e que os números estão ordenados
-                                                $numeros_extraidos = array_unique($numeros_extraidos);
-                                                sort($numeros_extraidos, SORT_NUMERIC);
-                                                ?>
-                                                
-                                                <?php if (!empty($numeros_extraidos)): ?>
-                                                    <div class="jogo-numeros-container text-center mb-4">
-                                                        <?php foreach ($numeros_extraidos as $numero): ?>
-                                                        <span class="jogo-numero"><?php echo str_pad(trim($numero), 2, '0', STR_PAD_LEFT); ?></span>
-                                                        <?php endforeach; ?>
-                                                    </div>
-                                                    <hr>
-                                                <?php endif; ?>
-                                                
-                                                <p><strong>Texto completo da aposta:</strong></p>
-                                                <pre class="mb-0"><?php echo htmlspecialchars($aposta['numeros']); ?></pre>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </div>
+    <div class="alert alert-info">
     </div>
+
 </div>
 
 <script>
@@ -531,13 +510,13 @@ function cancelarAposta(id) {
 
 function excluirAposta(id) {
     if (confirm('Tem certeza que deseja excluir esta aposta?')) {
-        fetch('../admin/ajax/excluir_aposta.php', {
+        fetch('ajax/excluir_aposta.php', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded',
                 'X-Requested-With': 'XMLHttpRequest'
             },
-            body: JSON.stringify({ id: id })
+            body: `id=${encodeURIComponent(id)}`
         })
         .then(response => response.json())
         .then(data => {

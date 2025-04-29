@@ -1,6 +1,13 @@
 <?php
 require_once '../config/database.php';
-session_start();
+
+// Verificar o modo de manutenção
+require_once __DIR__ . '/../includes/verificar_manutencao.php';
+
+// Verificar se não há sessão ativa antes de iniciar
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Script para limpar o cache local no caso de problemas de visualização
 $cacheVersion = '1.0.1'; // Atualizar sempre que houver mudanças importantes

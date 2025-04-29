@@ -4,6 +4,9 @@ session_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
+// Verificar se o sistema está em modo de manutenção
+require_once 'includes/verificar_manutencao.php';
+
 // Removida a verificação de sessão e redirecionamento
 
 try {

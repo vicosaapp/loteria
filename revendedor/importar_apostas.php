@@ -1,11 +1,16 @@
 <?php
-// Forçar exibição de erros
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 require_once '../config/database.php';
-session_start();
+
+// Verificar o modo de manutenção
+require_once __DIR__ . '/verificar_manutencao.php';
+
+// Verificar se não há sessão ativa antes de iniciar
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Script para limpar o cache local no caso de problemas de visualização
+$cacheVersion = '1.0.1'; // Atualizar sempre que houver mudanças importantes
 
 // Verificar se é revendedor
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'revendedor') {
@@ -13,338 +18,218 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'revendedor') {
     exit;
 }
 
-try {
-    // Debug da conexão
-    if (!$pdo) {
-        throw new Exception("Erro na conexão com o banco de dados");
-    }
-
-    // Buscar jogos disponíveis
-    $stmt = $pdo->query("SELECT id, nome FROM jogos WHERE status = 1 ORDER BY nome");
-    $jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Buscar apostadores vinculados ao revendedor atual
-    $stmt = $pdo->prepare("
-        SELECT id, nome, whatsapp, telefone 
-        FROM usuarios 
-        WHERE tipo = 'usuario' 
-        AND revendedor_id = ?
-        ORDER BY nome ASC
-    ");
-    $stmt->execute([$_SESSION['usuario_id']]);
-    $apostadores = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-    // Buscar dados do revendedor
-    $stmtRevendedor = $pdo->prepare("
-        SELECT id, nome 
-        FROM usuarios 
-        WHERE id = ? 
-        LIMIT 1
-    ");
-    $stmtRevendedor->execute([$_SESSION['usuario_id']]);
-    $revendedor = $stmtRevendedor->fetch(PDO::FETCH_ASSOC);
-
-    // Criar array para dados dos apostadores em JavaScript
-    $apostadoresData = [];
-    foreach ($apostadores as $apostador) {
-        $apostadoresData[$apostador['id']] = [
-            'whatsapp' => $apostador['whatsapp'] ?: $apostador['telefone'] ?: ''
-        ];
-    }
-
-} catch (Exception $e) {
-    error_log("Erro na importação de apostas: " . $e->getMessage());
-    $error = "Erro ao carregar os dados. Por favor, tente novamente.";
-}
-
-// Array para armazenar mensagens de debug
-$debug_messages = [];
-
+// Processar o formulário quando enviado
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // Validar campos obrigatórios
-        if (empty($_POST['apostador'])) {
-            throw new Exception("Selecione um apostador");
+        // Validar dados
+        if (empty($_POST['cliente_id']) || empty($_POST['jogo_id']) || empty($_POST['apostas']) || empty($_POST['valor_aposta'])) {
+            throw new Exception("Todos os campos são obrigatórios");
         }
         
-        if (empty($_POST['valor_aposta']) || empty($_POST['apostas'])) {
-            throw new Exception("Valor da aposta e apostas são obrigatórios");
+        $cliente_id = filter_input(INPUT_POST, 'cliente_id', FILTER_VALIDATE_INT);
+        $jogo_id = filter_input(INPUT_POST, 'jogo_id', FILTER_VALIDATE_INT);
+        
+        // Substitui FILTER_SANITIZE_STRING que foi depreciado
+        $apostas_texto = htmlspecialchars($_POST['apostas'] ?? '', ENT_QUOTES, 'UTF-8');
+        
+        // Verificar quebras de linha no texto recebido
+        $quebras_originais = substr_count($apostas_texto, "\n") + 1;
+        error_log("Texto recebido: " . strlen($apostas_texto) . " caracteres, com aproximadamente " . $quebras_originais . " linhas");
+        
+        // Normalizar quebras de linha para garantir consistência
+        $apostas_texto = str_replace(["\r\n", "\r"], "\n", $apostas_texto);
+        
+        $valor_aposta = filter_input(INPUT_POST, 'valor_aposta', FILTER_VALIDATE_FLOAT);
+        $valor_premio = filter_input(INPUT_POST, 'premio', FILTER_VALIDATE_FLOAT) ?: 0;
+        
+        // Validar valor da aposta
+        if ($valor_aposta === false || $valor_aposta <= 0) {
+            error_log("Valor da aposta inválido: " . print_r($_POST['valor_aposta'], true));
+            throw new Exception("Valor da aposta inválido");
+        }
+        
+        // Debug do valor do prêmio
+        if ($valor_premio === false) {
+            error_log("Valor do prêmio inválido: " . print_r($_POST['premio'], true));
+            $valor_premio = 0; // Fallback seguro
         }
 
-        // Processar valores
-        $usuario_id = intval($_POST['apostador']);
-        $revendedor_id = $_SESSION['usuario_id']; // Usa o ID do revendedor logado
-        $whatsapp = !empty($_POST['whatsapp']) ? $_POST['whatsapp'] : null;
+        // Separar as apostas por linha e processar cada linha
+        $linhas = array_filter(explode("\n", $apostas_texto), 'trim');
+        error_log("Número de linhas detectadas: " . count($linhas));
         
-        // Tratar valor da aposta
-        $valor_aposta = str_replace(['R$', ' '], '', $_POST['valor_aposta']);
-        $valor_aposta = str_replace(',', '.', $valor_aposta);
-        $valor_aposta = number_format(floatval($valor_aposta), 2, '.', '');
+        $apostas = [];
         
-        // Tratar valor do prêmio
-        $valor_premio = $_POST['valor_premiacao'];
-        error_log("Valor de premiação original: " . $valor_premio);
-
-        // Verifica se o valor do prêmio já está no formato correto (com vírgula como separador decimal)
-        if (strpos($valor_premio, ',') !== false) {
-            // Se já está no formato brasileiro (1.234,56), converte para o formato do banco (1234.56)
-            $valor_premio_banco = str_replace(['R$', ' '], '', $valor_premio);
-            $valor_premio_banco = str_replace('.', '', $valor_premio_banco); // Remove pontos de milhar
-            $valor_premio_banco = str_replace(',', '.', $valor_premio_banco); // Converte vírgula em ponto
-            $valor_premio_banco = number_format(floatval($valor_premio_banco), 2, '.', '');
+        // Processar cada linha para extrair os números
+        foreach ($linhas as $linha) {
+            // Remover espaços extras e separar números
+            $numeros = preg_split('/\s+/', trim($linha));
+            $numeros = array_filter($numeros, 'is_numeric');
             
-            error_log("Valor de premiação convertido para o banco: " . $valor_premio_banco);
-            
-            // Mantém o valor original formatado para exibição
-            $valor_premio_exibicao = $valor_premio;
-        } else {
-            // Se está em outro formato, trata normalmente
-            $valor_premio_banco = str_replace(['R$', ' '], '', $valor_premio);
-            $valor_premio_banco = str_replace('.', '', $valor_premio_banco);
-            $valor_premio_banco = str_replace(',', '.', $valor_premio_banco);
-            $valor_premio_banco = number_format(floatval($valor_premio_banco), 2, '.', '');
-            
-            // Formata para exibição
-            $valor_premio_exibicao = number_format(floatval($valor_premio_banco), 2, ',', '.');
-            
-            error_log("Valor de premiação formatado: " . $valor_premio_exibicao);
+            // Verificar se temos números suficientes para uma aposta
+            if (!empty($numeros)) {
+                $aposta = implode(',', $numeros);
+                $apostas[] = $aposta;
+                error_log("Aposta processada: " . $aposta . " - Números: " . count($numeros));
+            }
         }
         
-        // Verificar se o apostador pertence ao revendedor atual
+        if (empty($apostas)) {
+            throw new Exception("Nenhuma aposta válida encontrada");
+        }
+        
+        error_log("Total de apostas processadas: " . count($apostas));
+        
+        // Adicionar log para debug
+        error_log("Apostas processadas: " . count($apostas) . " - Linhas originais: " . count($linhas));
+        
+        // Buscar informações do jogo para validar
+        $stmt = $pdo->prepare("SELECT minimo_numeros, maximo_numeros FROM jogos WHERE id = ?");
+        $stmt->execute([$jogo_id]);
+        $jogo = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$jogo) {
+            throw new Exception("Jogo não encontrado");
+        }
+        
+        // Validar cada aposta
+        foreach ($apostas as $idx => $aposta) {
+            $numerosArray = explode(',', $aposta);
+            
+            // Validar número mínimo de dezenas
+            if (count($numerosArray) < $jogo['minimo_numeros']) {
+                throw new Exception("Aposta " . ($idx + 1) . " possui menos números que o mínimo permitido (" . $jogo['minimo_numeros'] . ")");
+            }
+            
+            // Validar número máximo de dezenas (com limite absoluto de segurança)
+            $maxPermitido = min($jogo['maximo_numeros'], 20);
+            if (count($numerosArray) > $maxPermitido) {
+                throw new Exception("Aposta " . ($idx + 1) . " excede o máximo permitido (" . $maxPermitido . " números)");
+            }
+            
+            // Verificar se existem valores configurados para a quantidade de números selecionados
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*) FROM valores_jogos 
+                WHERE jogo_id = ? AND dezenas = ?
+            ");
+            $stmt->execute([$jogo_id, count($numerosArray)]);
+            
+            if ($stmt->fetchColumn() == 0) {
+                throw new Exception("Não existem valores configurados para " . count($numerosArray) . " números neste jogo");
+            }
+        }
+        
+        // Verificar se o cliente pertence ao revendedor
         $stmt = $pdo->prepare("SELECT id FROM usuarios WHERE id = ? AND revendedor_id = ?");
-        $stmt->execute([$usuario_id, $revendedor_id]);
+        $stmt->execute([$cliente_id, $_SESSION['usuario_id']]);
+        
         if (!$stmt->fetch()) {
-            throw new Exception("Este apostador não está vinculado à sua conta");
+            throw new Exception("Cliente não encontrado ou não pertence a este revendedor");
         }
-        
-        // Verificar se já existe uma aposta idêntica (mesmo apostador, jogo e números)
-        $stmt = $pdo->prepare("
-            SELECT id FROM apostas_importadas 
-            WHERE usuario_id = ? 
-            AND jogo_nome = ? 
-            AND numeros = ? 
-            AND DATE(created_at) = CURDATE()
-        ");
-        $stmt->execute([
-            $usuario_id, 
-            trim(explode("\n", $_POST['apostas'])[0]),
-            $_POST['apostas']
-        ]);
-        
-        if ($stmt->fetch()) {
-            throw new Exception("Esta aposta já foi registrada hoje. Não são permitidas apostas duplicadas.");
-        }
-        
-        // Preparar os dados para inserção
-        $dados = [
-            'revendedor_id' => $_SESSION['usuario_id'],
-            'usuario_id' => $usuario_id,
-            'jogo_nome' => trim(explode("\n", $_POST['apostas'])[0]),
-            'numeros' => $_POST['apostas'],
-            'valor_aposta' => $valor_aposta,
-            'valor_premio' => $valor_premio_banco,
-            'whatsapp' => $whatsapp
-        ];
 
         // Iniciar transação
         $pdo->beginTransaction();
-
+        
         try {
-            // Verificar estrutura da tabela apostas
-            error_log("Verificando estrutura da tabela apostas...");
-            $stmt = $pdo->query("DESCRIBE apostas");
-            $colunas_apostas = $stmt->fetchAll(PDO::FETCH_COLUMN);
-            error_log("Colunas na tabela apostas: " . implode(", ", $colunas_apostas));
+            // Verificar número de apostas antes de inserir
+            error_log("Iniciando inserção de " . count($apostas) . " apostas no banco de dados");
             
-            // Verificar se a coluna revendedor_id existe na tabela apostas
-            if (!in_array('revendedor_id', $colunas_apostas)) {
-                error_log("Coluna revendedor_id não existe na tabela apostas. Adicionando...");
-                $pdo->exec("ALTER TABLE apostas ADD COLUMN revendedor_id INT NULL AFTER usuario_id");
-                error_log("Coluna revendedor_id adicionada à tabela apostas");
-            }
-            
-            // Inserir na tabela apostas_importadas
-            $stmt = $pdo->prepare("
-                INSERT INTO apostas_importadas (
-                    usuario_id,
-                    revendedor_id,
-                    jogo_nome,
-                    numeros,
-                    valor_aposta,
-                    valor_premio,
-                    whatsapp,
-                    created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
-            ");
-            $stmt->execute([
-                $usuario_id,
-                $_SESSION['usuario_id'],
-                trim(explode("\n", $_POST['apostas'])[0]),
-                $_POST['apostas'],
-                $valor_aposta,
-                $valor_premio_banco,
-                $whatsapp
-            ]);
-            $apostas_importadas_id = $pdo->lastInsertId();
-            
-            // Buscar o ID do jogo correspondente ao nome
-            $jogo_nome = trim(explode("\n", $_POST['apostas'])[0]);
-            
-            // Adicionar log para debug
-            error_log("Buscando jogo com nome: " . $jogo_nome);
-            
-            // Melhorar a busca do jogo: primeiro tenta correspondência exata, depois tenta LIKE
-            $stmt = $pdo->prepare("SELECT id, nome FROM jogos WHERE titulo_importacao = ? OR nome = ? LIMIT 1");
-            $stmt->execute([$jogo_nome, $jogo_nome]);
-            $jogo = $stmt->fetch(PDO::FETCH_ASSOC);
-            
-            // Se não encontrou com correspondência exata, tenta com LIKE
-            if (!$jogo) {
-                $stmt = $pdo->prepare("SELECT id, nome FROM jogos WHERE nome LIKE ? OR titulo_importacao LIKE ? LIMIT 1");
-                $stmt->execute(['%' . $jogo_nome . '%', '%' . $jogo_nome . '%']);
-                $jogo = $stmt->fetch(PDO::FETCH_ASSOC);
+            // Inserir cada aposta como um registro separado
+            foreach ($apostas as $index => $aposta) {
+                $stmt = $pdo->prepare("
+                    INSERT INTO apostas (
+                        usuario_id, 
+                        tipo_jogo_id, 
+                        numeros, 
+                        valor_aposta, 
+                        valor_premio,
+                        status, 
+                        created_at
+                    ) VALUES (?, ?, ?, ?, ?, 'aprovada', NOW())
+                ");
                 
-                // Adicionar log
-                error_log("Tentativa com LIKE: " . ($jogo ? "Jogo encontrado: {$jogo['nome']} (ID: {$jogo['id']})" : "Jogo não encontrado"));
-            } else {
-                error_log("Jogo encontrado com correspondência exata: {$jogo['nome']} (ID: {$jogo['id']})");
-            }
-            
-            // Se não encontrou o jogo, verifica se existe a coluna titulo_importacao, caso não exista, cria-a
-            if (!$jogo) {
-                try {
-                    // Verificar se a coluna titulo_importacao existe
-                    $checkColumn = $pdo->query("SHOW COLUMNS FROM jogos LIKE 'titulo_importacao'");
-                    if ($checkColumn->rowCount() == 0) {
-                        // A coluna não existe, vamos criá-la
-                        error_log("Coluna 'titulo_importacao' não existe na tabela jogos. Criando...");
-                        $pdo->exec("ALTER TABLE jogos ADD COLUMN titulo_importacao VARCHAR(100) NULL AFTER nome");
-                    }
-                    
-                    // Listar todos os jogos disponíveis para diagnóstico
-                    error_log("Jogos disponíveis na tabela jogos:");
-                    $jogosDisponiveis = $pdo->query("SELECT id, nome, titulo_importacao FROM jogos")->fetchAll(PDO::FETCH_ASSOC);
-                    foreach ($jogosDisponiveis as $jogoDisp) {
-                        error_log("ID: {$jogoDisp['id']}, Nome: {$jogoDisp['nome']}, Título Importação: " . ($jogoDisp['titulo_importacao'] ?? 'NULL'));
-                    }
-                    
-                    // Tenta novamente com o nome exato, sem filtros
-                    $stmt = $pdo->prepare("SELECT id FROM jogos WHERE nome = ? LIMIT 1");
-                    $stmt->execute([$jogo_nome]);
-                    $jogo = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
-                    if (!$jogo) {
-                        // Tenta extrair código do jogo (QN, DI, MM, MS, LF, LM, TM)
-                        preg_match('/(QN|DI|MM|MS|LF|LM|TM)/', $jogo_nome, $matches);
-                        $codigoJogo = $matches[0] ?? '';
-                        
-                        if ($codigoJogo) {
-                            error_log("Código do jogo extraído: {$codigoJogo}");
-                            
-                            // Mapear códigos para nomes completos
-                            $mapaJogos = [
-                                'QN' => 'Quina',
-                                'DI' => 'Dia de Sorte',
-                                'MM' => 'Mais Milionária',
-                                'MS' => 'Mega-Sena',
-                                'LF' => 'Lotofácil',
-                                'LM' => 'Lotomania',
-                                'TM' => 'Timemania'
-                            ];
-                            
-                            $nomeCompleto = $mapaJogos[$codigoJogo] ?? '';
-                            
-                            if ($nomeCompleto) {
-                                error_log("Tentando buscar pelo nome completo: {$nomeCompleto}");
-                                $stmt = $pdo->prepare("SELECT id FROM jogos WHERE nome LIKE ? LIMIT 1");
-                                $stmt->execute(['%' . $nomeCompleto . '%']);
-                                $jogo = $stmt->fetch(PDO::FETCH_ASSOC);
-                                
-                                if ($jogo) {
-                                    error_log("Jogo encontrado pelo nome completo mapeado: {$nomeCompleto} (ID: {$jogo['id']})");
-                                    
-                                    // Atualiza o título_importacao para futuras referências
-                                    $stmt = $pdo->prepare("UPDATE jogos SET titulo_importacao = ? WHERE id = ?");
-                                    $stmt->execute([$jogo_nome, $jogo['id']]);
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception $e) {
-                    error_log("Erro ao verificar/criar coluna titulo_importacao: " . $e->getMessage());
+                $result = $stmt->execute([
+                    $cliente_id,
+                    $jogo_id,
+                    $aposta,
+                    $valor_aposta,
+                    $valor_premio
+                ]);
+                
+                if (!$result) {
+                    error_log("Erro ao inserir aposta #" . ($index + 1));
+                    throw new Exception("Erro ao salvar a aposta #" . ($index + 1));
                 }
             }
-            
-            // Se encontrou o jogo, insere também na tabela apostas
-            if ($jogo) {
-                $jogo_id = $jogo['id'];
-                error_log("Inserindo na tabela apostas com jogo_id: {$jogo_id}");
-                
-                // Inserir na tabela apostas
-                try {
-                    // Extrair os números da primeira linha de apostas (ignorando o título)
-                    $linhas_apostas = explode("\n", $_POST['apostas']);
-                    if (count($linhas_apostas) >= 2) {
-                        // Remove a primeira linha (título do jogo)
-                        array_shift($linhas_apostas);
-                        
-                        // Pega a primeira aposta
-                        $primeira_aposta = trim($linhas_apostas[0]);
-                        
-                        // Extrai somente os números da primeira aposta
-                        preg_match_all('/\d+/', $primeira_aposta, $matches);
-                        $numeros_formatados = implode(',', $matches[0]);
-                        
-                        error_log("Números formatados para tabela apostas: {$numeros_formatados}");
-                    } else {
-                        $numeros_formatados = "";
-                        error_log("Não foi possível extrair números da aposta. Usando texto completo.");
-                    }
-                    
-                    // Usar os números formatados se disponíveis, caso contrário usa o texto completo
-                    $numeros_para_apostas = !empty($numeros_formatados) ? $numeros_formatados : $_POST['apostas'];
-                    
-                    $stmt = $pdo->prepare("
-                        INSERT INTO apostas 
-                        (usuario_id, tipo_jogo_id, numeros, valor_aposta, status, created_at, revendedor_id) 
-                        VALUES 
-                        (?, ?, ?, ?, 'aprovada', NOW(), ?)
-                    ");
-                    $stmt->execute([
-                        $usuario_id,
-                        $jogo_id,
-                        $numeros_para_apostas,
-                        $valor_aposta,
-                        $_SESSION['usuario_id']
-                    ]);
-                    error_log("Aposta inserida com sucesso na tabela apostas");
-                } catch (Exception $e) {
-                    error_log("Erro ao inserir na tabela apostas: " . $e->getMessage());
-                    // Não fazemos throw aqui para não interromper o fluxo, já que a inserção em apostas_importadas funcionou
-                }
-            } else {
-                // Log para debug se não encontrar o jogo
-                error_log("Jogo não encontrado para: '{$jogo_nome}'. A aposta não foi salva na tabela apostas.");
-            }
-            
+
             // Commit da transação
             $pdo->commit();
             
-            header('Location: importar_apostas.php?success=1');
-            exit;
+            $mensagem = count($apostas) . " aposta(s) registrada(s) com sucesso!";
+            $tipo_mensagem = "success";
+            error_log("Transação concluída: " . count($apostas) . " apostas registradas");
+            
+            // Adicionar timestamp para visualização das apostas recém-criadas
+            $_SESSION['ultima_importacao'] = time();
+            $_SESSION['apostas_importadas'] = count($apostas);
+            
         } catch (Exception $e) {
             // Rollback em caso de erro
             $pdo->rollBack();
+            error_log("Erro na transação: " . $e->getMessage());
             throw $e;
         }
         
     } catch (Exception $e) {
-        $erro = $e->getMessage();
+        $mensagem = $e->getMessage();
+        $tipo_mensagem = "danger";
     }
 }
 
-// Define a página atual para o menu
-$currentPage = 'importar_apostas';
+// Buscar clientes do revendedor
+$stmt = $pdo->prepare("
+    SELECT id, nome 
+    FROM usuarios 
+    WHERE revendedor_id = ?
+    ORDER BY nome
+");
+$stmt->execute([$_SESSION['usuario_id']]);
+$clientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Buscar jogos disponíveis
+$stmt = $pdo->query("
+    SELECT 
+        id, 
+        nome, 
+        minimo_numeros,
+        maximo_numeros, 
+        numeros_disponiveis,
+        dezenas,
+        valor, 
+        premio 
+    FROM jogos 
+    WHERE status = 1 
+    ORDER BY nome
+");
+$jogos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+// Obter valores dos jogos para usar no JavaScript
+$valoresJogos = [];
+foreach ($jogos as $jogo) {
+    $stmtValores = $pdo->prepare("
+        SELECT jogo_id, dezenas, valor_aposta, valor_premio
+        FROM valores_jogos
+        WHERE jogo_id = ?
+        ORDER BY dezenas, valor_aposta
+    ");
+    $stmtValores->execute([$jogo['id']]);
+    $valores = $stmtValores->fetchAll(PDO::FETCH_ASSOC);
+    
+    $valoresJogos[$jogo['id']] = $valores;
+}
+
+// Define a página atual
+$currentPage = 'apostas';
 
 // Carrega a view
 ob_start();
@@ -353,84 +238,91 @@ ob_start();
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 mb-0 text-gray-800">
-            <i class="fas fa-file-import"></i> Importar Apostas
+            <i class="fas fa-plus-circle"></i> Nova Aposta
         </h1>
-    </div>
-        
-    <div class="debug-info" style="background:#f4f6f9; padding: 0px; margin: 0px 0; border-radius: 0px; max-height: 0px; overflow-y: auto;">
+        <div>
+            <button onclick="limparCacheLocal()" class="btn btn-warning btn-sm me-2" type="button">
+                <i class="fas fa-sync-alt"></i> Limpar Cache
+            </button>
+            <a href="apostas.php" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
     </div>
     
-    <?php if (isset($error)): ?>
-        <div class="alert alert-danger"><?php echo $error; ?></div>
+    <?php if (isset($mensagem)): ?>
+        <div class="alert alert-<?php echo $tipo_mensagem; ?>" role="alert">
+            <div class="d-flex justify-content-between align-items-center">
+                <div><?php echo $mensagem; ?></div>
+                <?php if ($tipo_mensagem == 'success' && isset($_SESSION['apostas_importadas']) && $_SESSION['apostas_importadas'] > 0): ?>
+                    <a href="apostas.php?ultimas=<?php echo $_SESSION['apostas_importadas']; ?>" class="btn btn-primary ms-3">
+                        <i class="fas fa-eye"></i> Ver estas apostas
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
     <?php endif; ?>
     
-    <?php if (isset($_GET['success'])): ?>
-        <div class="alert alert-success">Aposta importada com sucesso!</div>
-    <?php endif; ?>
-
     <div class="card shadow-sm">
         <div class="card-body">
-            <form method="POST" class="mt-4">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="apostador" class="form-label">Apostador</label>
-                        <select class="form-control form-select" id="apostador" name="apostador" required>
-                            <option value="">Selecione um apostador</option>
-                            <?php foreach ($apostadores as $apostador): ?>
-                                <option value="<?php echo $apostador['id']; ?>" 
-                                        data-whatsapp="<?php echo htmlspecialchars($apostador['whatsapp'] ?: $apostador['telefone'] ?: ''); ?>">
-                                    <?php echo htmlspecialchars($apostador['nome']); ?>
+            <form method="POST" action="" id="formAposta">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="cliente_id" class="form-label">Cliente</label>
+                        <select name="cliente_id" id="cliente_id" class="form-control form-select" required>
+                            <option value="">Selecione um cliente</option>
+                            <?php foreach ($clientes as $cliente): ?>
+                                <option value="<?php echo $cliente['id']; ?>">
+                                    <?php echo htmlspecialchars($cliente['nome']); ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-
-                    <div class="col-md-6 mb-3">
-                        <label for="whatsapp" class="form-label">WhatsApp</label>
-                        <input type="text" class="form-control" id="whatsapp" name="whatsapp" readonly>
+                    
+                    <div class="col-md-6">
+                        <label for="jogo_id" class="form-label">Jogo</label>
+                        <select name="jogo_id" id="jogo_id" class="form-control form-select" required onchange="carregarConfigJogo()">
+                            <option value="">Selecione um jogo</option>
+                            <?php foreach ($jogos as $jogo): ?>
+                                <option value="<?php echo $jogo['id']; ?>" 
+                                        data-min-numeros="<?php echo $jogo['minimo_numeros'] ?? 6; ?>"
+                                        data-max-numeros="<?php echo $jogo['maximo_numeros'] ?? 15; ?>"
+                                        data-qtd-dezenas="<?php echo $jogo['numeros_disponiveis'] ?? 60; ?>">
+                                    <?php echo htmlspecialchars($jogo['nome']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                 </div>
-                <div class="col-md-6 mb-3">
-                    <label>Valor da premiação</label>
-                    <div class="input-group">
-                        <div class="input-group-prepend">
-                            <span class="input-group-text">R$</span>
+                
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Cole as apostas (uma por linha)</label>
+                        <textarea id="apostasTextarea" name="apostas" class="form-control" rows="8" placeholder="Exemplo:\n01 02 03 04 05 06 07 08 09 10 11 12 13 14 15\n02 03 04 05 06 07 08 09 10 11 12 13 14 15 16"></textarea>
+                        <div class="alert alert-info mt-2">
+                            Cole os números das apostas, separados por espaço, uma aposta por linha.<br>
+                            Exemplo: <code>01 02 03 04 05 06 07 08 09 10 11 12 13 14 15</code>
                         </div>
-                        <input type="text" id="valor_premiacao" name="valor_premiacao" class="form-control text-right" value="0,00" readonly>
+                        <div id="previewApostas" class="apostas-preview mt-3"></div>
                     </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Valor por Aposta</label>
+                    <div class="col-md-6 mt-3">
+                        <label for="valor_aposta" class="form-label">Valor da Aposta</label>
                         <div class="input-group">
                             <span class="input-group-text">R$</span>
-                            <select id="valor_aposta" name="valor_aposta" class="form-control" required>
+                            <select name="valor_aposta" id="valor_aposta" class="form-control" required>
                                 <option value="">Selecione o valor</option>
                             </select>
                         </div>
-                        <small class="form-text text-muted">Os valores disponíveis dependem do número de dezenas da aposta.</small>
-                    </div>
-
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Quantidade de Dezenas</label>
-                        <input type="text" id="qtd_dezenas" class="form-control" readonly>
-                        <small class="form-text text-muted">Quantidade de dezenas detectada automaticamente.</small>
+                        <input type="hidden" name="premio" id="premioInput" value="">
+                        <div id="infoPremiacao" class="mt-2 d-none">
+                            <small class="text-muted">Valor do Prêmio: <span id="valorPremiacao">R$ 0,00</span></small>
+                        </div>
                     </div>
                 </div>
-
-                <div class="form-group mb-3">
-                    <label class="form-label">Cole as apostas aqui</label>
-                    <textarea id="apostas" name="apostas" class="form-control" rows="10"></textarea>
-                    <small class="form-text text-muted">Na primeira linha, coloque o nome do jogo. Nas linhas seguintes, coloque os números.</small>
-                </div>
-
-                <div class="mt-3 mb-5">
-                    <button type="button" class="btn btn-secondary" id="btnVisualizar">
-                        <i class="fas fa-eye"></i> Visualizar
-                    </button>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save"></i> Salvar Dados
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit">
+                        <i class="fas fa-save"></i> Confirmar Aposta
                     </button>
                 </div>
             </form>
@@ -438,30 +330,71 @@ ob_start();
     </div>
 </div>
 
-<!-- Modal para visualização -->
-<div class="modal fade" id="visualizarModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Visualizar Apostas</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="resumoApostas"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Arquivos JavaScript -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- Adicionar importação do script externo -->
-<script src="assets/js/importar-apostas.js"></script>
-</body>
-</html>
-
 <style>
+.numeros-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 10px;
+}
+
+.numero-item {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #f0f0f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    border: 2px solid #ddd;
+}
+
+.numero-item:hover {
+    background-color: #e0e0e0;
+    transform: scale(1.05);
+}
+
+.numero-item.selected {
+    background-color: #3498db;
+    color: white;
+    border-color: #2980b9;
+    transform: scale(1.1);
+}
+
+@media (max-width: 768px) {
+    .numeros-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
+@media (max-width: 576px) {
+    .numeros-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+    
+    .numero-item {
+        width: 35px;
+        height: 35px;
+        font-size: 0.9rem;
+    }
+}
+
+.apostas-preview {
+    max-height: 300px;
+    overflow-y: auto;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+.aposta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
 .numero-bolinha {
     display: inline-flex;
     align-items: center;
@@ -471,60 +404,287 @@ ob_start();
     background-color: #4e73df;
     color: white;
     border-radius: 50%;
-    margin: 2px;
+    margin: 1px;
     font-weight: 600;
     font-size: 13px;
     padding: 0;
     line-height: 1;
     text-align: center;
 }
-
-.aposta-item {
-    padding: 15px;
-    border-bottom: 1px solid #e3e6f0;
-}
-
-.aposta-item:last-child {
-    border-bottom: none;
-}
-
-.apostas-preview {
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.alert-info {
-    background-color: #e3f2fd;
-    border-color: #bee5eb;
-    color: #0c5460;
-    margin-bottom: 20px;
-}
-
-.gap-1 {
-    gap: 0.25rem !important;
-}
-
-.modal-lg {
-    max-width: 800px;
-}
-
-.text-primary {
-    color: #4e73df !important;
-}
-
-#valor_aposta {
-    text-align: right;
-}
-
-#valor_premiacao {
-    text-align: right;
-    font-weight: bold;
-}
-
-.text-danger {
-    color: #dc3545 !important;
-}
 </style>
+
+<script>
+let minNumeros = 6; // Valor padrão
+let maxNumeros = 15; // Valor padrão
+let qtdDezenas = 60; // Valor padrão
+let valoresJogos = <?php echo json_encode($valoresJogos); ?>;
+let jogoAtual = null;
+
+function carregarConfigJogo() {
+    const jogoSelect = document.getElementById('jogo_id');
+    const jogoOption = jogoSelect.options[jogoSelect.selectedIndex];
+    if (jogoOption && jogoOption.value) {
+        jogoAtual = jogoOption.value;
+        minNumeros = parseInt(jogoOption.dataset.minNumeros || 6);
+        maxNumeros = parseInt(jogoOption.dataset.maxNumeros || 15);
+        qtdDezenas = parseInt(jogoOption.dataset.qtdDezenas || 60);
+        // Limpar select de valores
+        const valorSelect = document.getElementById('valor_aposta');
+        valorSelect.innerHTML = '<option value="">Selecione o valor</option>';
+        // Ao trocar o jogo, processar apostas coladas para atualizar valores
+        processarApostasColadas();
+    } else {
+        jogoAtual = null;
+        document.getElementById('valor_aposta').innerHTML = '<option value="">Selecione o valor</option>';
+    }
+}
+
+function atualizarValoresDisponiveis(qtdNumeros) {
+    const valorSelect = document.getElementById('valor_aposta');
+    const infoPremiacaoEl = document.getElementById('infoPremiacao');
+    const valorPremiacaoEl = document.getElementById('valorPremiacao');
+    
+    // Limpar select de valores
+    valorSelect.innerHTML = '<option value="">Selecione o valor</option>';
+    
+    // Esconder info de premiação inicialmente
+    if (infoPremiacaoEl) infoPremiacaoEl.classList.add('d-none');
+    if (valorPremiacaoEl) valorPremiacaoEl.textContent = '';
+    
+    if (!jogoAtual || !valoresJogos[jogoAtual]) return;
+    
+    // Verificar se há valores configurados para o jogo atual
+    if (valoresJogos[jogoAtual].length === 0) {
+        valorSelect.innerHTML = '<option value="">Não há valores configurados para este jogo</option>';
+        return;
+    }
+    
+    // Filtrar valores para a quantidade de números selecionados
+    const valoresDisponiveis = valoresJogos[jogoAtual].filter(v => v.dezenas == qtdNumeros);
+    
+    if (valoresDisponiveis.length === 0) {
+        // Não há valores para a quantidade de números selecionados
+        valorSelect.innerHTML = '<option value="">Não disponível para esta quantidade</option>';
+        return;
+    }
+    
+    // Adicionar opções ao select
+    valoresDisponiveis.forEach(valor => {
+        const option = document.createElement('option');
+        option.value = valor.valor_aposta;
+        option.textContent = `R$ ${parseFloat(valor.valor_aposta).toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+        option.setAttribute('data-premio', valor.valor_premio);
+        option.setAttribute('data-valor-base', valor.valor_aposta);
+        valorSelect.appendChild(option);
+    });
+    
+    // Selecionar o primeiro valor por padrão
+    if (valorSelect.options.length > 1) {
+        valorSelect.selectedIndex = 1;
+        atualizarPremiacao();
+    }
+    
+    // Evento para atualizar premiação quando o valor mudar
+    valorSelect.addEventListener('change', atualizarPremiacao);
+}
+
+function atualizarPremiacao() {
+    const valorSelect = document.getElementById('valor_aposta');
+    const infoPremiacaoEl = document.getElementById('infoPremiacao');
+    const valorPremiacaoEl = document.getElementById('valorPremiacao');
+    const premioInput = document.getElementById('premioInput');
+    
+    if (valorSelect.selectedIndex > 0) {
+        const option = valorSelect.options[valorSelect.selectedIndex];
+        const valorAposta = parseFloat(option.value);
+        const valorBasePremio = parseFloat(option.getAttribute('data-premio'));
+        const valorBaseAposta = parseFloat(option.getAttribute('data-valor-base'));
+        
+        // Calcular o multiplicador baseado no valor da aposta
+        const multiplicador = valorAposta / valorBaseAposta;
+        
+        // Calcular valor final do prêmio
+        const valorPremioFinal = valorBasePremio * multiplicador;
+        
+        // Mostrar info de premiação
+        if (infoPremiacaoEl) infoPremiacaoEl.classList.remove('d-none');
+        if (valorPremiacaoEl) valorPremiacaoEl.textContent = `R$ ${valorPremioFinal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+        
+        // Atualizar o campo oculto com o valor do prêmio
+        if (premioInput) premioInput.value = valorPremioFinal;
+    } else {
+        // Esconder info de premiação
+        if (infoPremiacaoEl) infoPremiacaoEl.classList.add('d-none');
+        if (valorPremiacaoEl) valorPremiacaoEl.textContent = '';
+        if (premioInput) premioInput.value = '';
+    }
+}
+
+document.getElementById('formAposta').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    // Validação baseada nas apostas coladas
+    const textarea = document.getElementById('apostasTextarea');
+    const apostas = textarea.value.trim().split('\n').map(l => l.trim()).filter(l => l);
+    if (apostas.length === 0) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Nenhuma aposta colada',
+            text: 'Cole pelo menos uma aposta para continuar.'
+        });
+        return;
+    }
+    if (!jogoAtual) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Jogo não selecionado',
+            text: 'Selecione um jogo antes de confirmar.'
+        });
+        return;
+    }
+    let erro = null;
+    apostas.forEach((linha, idx) => {
+        const numeros = linha.split(/\s+/).filter(n => n);
+        if (numeros.length < minNumeros) {
+            erro = `Aposta ${idx+1} possui menos números que o mínimo permitido (${minNumeros}).`;
+        }
+        if (numeros.length > maxNumeros) {
+            erro = `Aposta ${idx+1} possui mais números que o máximo permitido (${maxNumeros}).`;
+        }
+        if (numeros.length > 20) {
+            erro = `Aposta ${idx+1} excede o limite absoluto de 20 números.`;
+        }
+    });
+    if (erro) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Aposta inválida',
+            text: erro
+        });
+        return;
+    }
+    // Verificação de valor da aposta
+    const valorSelect = document.getElementById('valor_aposta');
+    if (valorSelect.value === '') {
+        Swal.fire({
+            icon: 'error',
+            title: 'Valor não selecionado',
+            text: 'Por favor, selecione um valor para a aposta.'
+        });
+        return;
+    }
+
+    // Processar as apostas - preservando o formato de uma aposta por linha
+    this.submit();
+});
+
+// Substituir seleção manual por processamento do textarea
+function processarApostasColadas() {
+    const textarea = document.getElementById('apostasTextarea');
+    const valorSelect = document.getElementById('valor_aposta');
+    if (!jogoAtual) {
+        console.log('[DEBUG] Nenhum jogo selecionado');
+        valorSelect.innerHTML = '<option value="">Selecione o valor</option>';
+        return;
+    }
+    const apostas = textarea.value.trim().split('\n').map(l => l.trim()).filter(l => l);
+    if (apostas.length === 0) {
+        console.log('[DEBUG] Nenhuma aposta colada');
+        valorSelect.innerHTML = '<option value="">Selecione o valor</option>';
+        return;
+    }
+    // Detectar quantidade de dezenas da primeira linha válida
+    let dezenas = 0;
+    for (let i = 0; i < apostas.length; i++) {
+        const numeros = apostas[i].split(/\s+/).filter(n => n);
+        if (numeros.length > 0) {
+            dezenas = numeros.length;
+            break;
+        }
+    }
+    console.log('[DEBUG] Jogo selecionado:', jogoAtual);
+    console.log('[DEBUG] Dezenas detectadas:', dezenas);
+    console.log('[DEBUG] valoresJogos[jogoAtual]:', valoresJogos[jogoAtual]);
+    if (dezenas > 0) {
+        atualizarValoresDisponiveis(dezenas);
+    } else {
+        valorSelect.innerHTML = '<option value="">Selecione o valor</option>';
+    }
+}
+
+function atualizarPreviewApostas() {
+    const textarea = document.getElementById('apostasTextarea');
+    const preview = document.getElementById('previewApostas');
+    
+    // Limpa a preview
+    preview.innerHTML = '';
+    
+    if (!textarea.value.trim()) {
+        return;
+    }
+    
+    // Separa por linhas, ignorando linhas vazias
+    const apostas = textarea.value.trim().split('\n')
+        .map(linha => linha.trim())
+        .filter(linha => linha);
+    
+    console.log(`Número de linhas detectadas na preview: ${apostas.length}`);
+    
+    let html = '';
+    apostas.forEach((linha, idx) => {
+        const numeros = linha.split(/\s+/).filter(n => n.trim() !== '');
+        console.log(`Linha ${idx+1}: ${numeros.length} números`);
+        
+        html += `<div class='aposta-item mb-1'><span class='me-2 text-muted'>${(idx+1).toString().padStart(2,'0')}</span>`;
+        numeros.forEach(num => {
+            html += `<span class='numero-bolinha'>${num.padStart(2,'0')}</span>`;
+        });
+        html += '</div>';
+    });
+    preview.innerHTML = html;
+    
+    // Atualiza o contador
+    if (apostas.length > 0) {
+        const counter = document.createElement('div');
+        counter.className = 'text-end mt-2 text-muted';
+        counter.innerHTML = `<small>Total: ${apostas.length} aposta(s)</small>`;
+        preview.appendChild(counter);
+    }
+}
+
+document.getElementById('jogo_id').addEventListener('change', carregarConfigJogo);
+document.getElementById('apostasTextarea').addEventListener('input', processarApostasColadas);
+document.getElementById('apostasTextarea').addEventListener('input', atualizarPreviewApostas);
+window.addEventListener('DOMContentLoaded', atualizarPreviewApostas);
+
+// Função para limpar o cache local
+function limparCacheLocal() {
+    if (window.caches) {
+        caches.keys().then(function(names) {
+            for (let name of names) {
+                caches.delete(name);
+            }
+        });
+    }
+    
+    // Limpar localStorage
+    localStorage.clear();
+    
+    // Limpar sessionStorage
+    sessionStorage.clear();
+    
+    // Recarregar página com limpeza de cache
+    location.reload(true);
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'Cache Limpo',
+        text: 'O cache local foi limpo com sucesso. A página será recarregada.',
+        showConfirmButton: false,
+        timer: 2000
+    });
+}
+</script>
 
 <?php
 $content = ob_get_clean();
