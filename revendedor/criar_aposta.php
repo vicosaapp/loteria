@@ -92,6 +92,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Cliente não encontrado ou não pertence a este revendedor");
         }
         
+        // Verificar se já existe uma aposta idêntica para este jogo e números
+        $stmt = $pdo->prepare("
+            SELECT a.id, u.nome as apostador 
+            FROM apostas a
+            JOIN usuarios u ON a.usuario_id = u.id
+            WHERE a.tipo_jogo_id = ? 
+            AND a.numeros = ? 
+            AND DATE(a.created_at) = CURDATE()
+        ");
+        $stmt->execute([$jogo_id, $numeros]);
+        
+        $aposta_existente = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($aposta_existente) {
+            throw new Exception("Essa sequência de números já foi apostada hoje por {$aposta_existente['apostador']}. Não são permitidas apostas com a mesma sequência de números.");
+        }
+        
         // Inserir aposta
         $stmt = $pdo->prepare("
             INSERT INTO apostas (
@@ -188,6 +205,11 @@ ob_start();
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
         </div>
+    </div>
+    
+    <!-- Alerta informativo sobre apostas repetidas -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle me-2"></i> <strong>Atenção!</strong> Não é permitido registrar apostas com a mesma sequência de números no mesmo jogo no mesmo dia, independentemente do cliente.
     </div>
     
     <?php if (isset($mensagem)): ?>
@@ -700,8 +722,57 @@ document.getElementById('formAposta').addEventListener('submit', function(e) {
         }
     }
     
-    // Se passar por todas as validações, enviar o formulário
-    this.submit();
+    // Verificar se já existe uma aposta idêntica (mesmo cliente, jogo e números)
+    const cliente_id = document.getElementById('cliente_id').value;
+    const jogo_id = document.getElementById('jogo_id').value;
+    const numeros = document.getElementById('numerosInput').value;
+    
+    // Mostrar loading enquanto verifica
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'Verificando aposta...',
+            text: 'Aguarde enquanto verificamos se esta aposta já existe',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+    }
+    
+    // Verificar se a aposta é repetida via AJAX
+    fetch('ajax/verificar_aposta_repetida.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: `cliente_id=${cliente_id}&jogo_id=${jogo_id}&numeros=${numeros}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.exists) {
+            // Aposta já existe
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Aposta repetida',
+                    text: data.apostador 
+                        ? `Esta sequência de números já foi apostada hoje por ${data.apostador}. Não são permitidas apostas duplicadas.`
+                        : 'Esta sequência de números já foi apostada hoje. Não são permitidas apostas duplicadas.'
+                });
+            } else {
+                alert('Esta sequência de números já foi apostada hoje. Não são permitidas apostas duplicadas.');
+            }
+        } else {
+            // Se passar por todas as validações, enviar o formulário
+            document.getElementById('formAposta').submit();
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao verificar aposta:', error);
+        // Em caso de erro na verificação, permite o envio do formulário
+        // O backend fará a validação final
+        document.getElementById('formAposta').submit();
+    });
 });
 
 // Inicializar ao carregar a página

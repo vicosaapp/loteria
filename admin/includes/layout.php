@@ -6,8 +6,20 @@ $content = $content ?? '';
 <html>
 <head>
     <title>Admin - Loteria</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.25/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.2.9/css/responsive.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/rowgroup/1.1.3/css/rowGroup.bootstrap5.min.css">
+    
     <style>
         * {
             margin: 0;
@@ -120,6 +132,7 @@ $content = $content ?? '';
         .main-content {
             margin-left: 250px;
             padding: 20px;
+            width: calc(100% - 250px);
         }
 
         .page-header {
@@ -135,6 +148,33 @@ $content = $content ?? '';
             color: #2c3e50;
             font-size: 24px;
         }
+        
+        /* Estilos responsivos */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 70px;
+                overflow: hidden;
+            }
+            
+            .sidebar-header h1, .sidebar-nav span {
+                display: none;
+            }
+            
+            .sidebar-nav a {
+                justify-content: center;
+                padding: 15px 0;
+            }
+            
+            .sidebar-nav i {
+                margin-right: 0;
+                font-size: 1.2rem;
+            }
+            
+            .main-content {
+                margin-left: 70px;
+                width: calc(100% - 70px);
+            }
+        }
     </style>
 </head>
 <body>
@@ -142,6 +182,7 @@ $content = $content ?? '';
         <div class="sidebar">
             <div class="sidebar-header">
                 <img src="../assets/img/logo.png" alt="Logo" class="logo">
+                <h1>Administração</h1>
             </div>
             
             <nav class="sidebar-nav">
@@ -161,7 +202,7 @@ $content = $content ?? '';
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?php echo $currentPage == 'importar_apostas' ? 'active' : ''; ?>" href="importar_apostas.php">
-                            <i class="fas fa-file-import"></i> Importar Apostas
+                            <i class="fas fa-file-import"></i> <span>Importar Apostas</span>
                         </a>
                     <li>
                         <a href="gerenciar_resultados.php" class="<?php echo $currentPage == 'resultados' ? 'active' : ''; ?>">
@@ -213,9 +254,19 @@ $content = $content ?? '';
         </div>
     </div>
     
+    <!-- jQuery primeiro, depois Popper.js, depois Bootstrap JS -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.2.9/js/responsive.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/rowgroup/1.1.3/js/dataTables.rowGroup.min.js"></script>
+    
+    <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </body>
 </html>

@@ -126,6 +126,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$stmt->fetch()) {
             throw new Exception("Cliente não encontrado ou não pertence a este revendedor");
         }
+        
+        // Verificar apostas repetidas antes de inserir
+        $apostasRepetidas = [];
+        foreach ($apostas as $index => $aposta) {
+            // Verificar se já existe uma aposta idêntica para este jogo e números
+            $stmt = $pdo->prepare("
+                SELECT a.id, u.nome as apostador 
+                FROM apostas a
+                JOIN usuarios u ON a.usuario_id = u.id
+                WHERE a.tipo_jogo_id = ? 
+                AND a.numeros = ? 
+                AND DATE(a.created_at) = CURDATE()
+            ");
+            $stmt->execute([$jogo_id, $aposta]);
+            
+            $aposta_existente = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($aposta_existente) {
+                $apostasRepetidas[] = [
+                    'indice' => $index + 1,
+                    'apostador' => $aposta_existente['apostador'],
+                    'numeros' => $aposta
+                ];
+            }
+        }
+        
+        // Se houver apostas repetidas, não permitir a importação
+        if (!empty($apostasRepetidas)) {
+            $mensagemErro = "As seguintes apostas não podem ser registradas pois já existem no sistema para hoje:<br><ul>";
+            
+            foreach ($apostasRepetidas as $ap) {
+                $numerosFormatados = implode(' ', array_map(function($n) {
+                    return str_pad($n, 2, '0', STR_PAD_LEFT);
+                }, explode(',', $ap['numeros'])));
+                
+                $mensagemErro .= "<li>Aposta #{$ap['indice']}: {$numerosFormatados} - já feita por {$ap['apostador']}</li>";
+            }
+            
+            $mensagemErro .= "</ul>Não são permitidas apostas com a mesma sequência de números.";
+            
+            throw new Exception($mensagemErro);
+        }
 
         // Iniciar transação
         $pdo->beginTransaction();
@@ -262,6 +304,11 @@ ob_start();
             </div>
         </div>
     <?php endif; ?>
+    
+    <!-- Alerta informativo sobre apostas repetidas -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-info-circle me-2"></i> <strong>Atenção!</strong> Não é permitido registrar apostas com a mesma sequência de números no mesmo jogo no mesmo dia, independentemente do cliente.
+    </div>
     
     <div class="card shadow-sm">
         <div class="card-body">
@@ -574,8 +621,86 @@ document.getElementById('formAposta').addEventListener('submit', function(e) {
         return;
     }
 
-    // Processar as apostas - preservando o formato de uma aposta por linha
-    this.submit();
+    // Verificar apostas repetidas
+    const cliente_id = document.getElementById('cliente_id').value;
+    const jogo_id = document.getElementById('jogo_id').value;
+    
+    // Criar array de apostas formatadas para verificação
+    const apostasFormatadas = apostas.map(linha => {
+        const numeros = linha.split(/\s+/).filter(n => n).map(n => parseInt(n, 10));
+        return numeros.sort((a, b) => a - b).join(',');
+    });
+    
+    // Mostrar loading enquanto verifica
+    Swal.fire({
+        title: 'Verificando apostas...',
+        text: 'Aguarde enquanto verificamos se existe alguma aposta repetida',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Fazer múltiplas verificações de apostas repetidas
+    const verificacoes = apostasFormatadas.map((numeros, index) => {
+        return fetch('ajax/verificar_aposta_repetida.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `cliente_id=${cliente_id}&jogo_id=${jogo_id}&numeros=${numeros}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.exists) {
+                return {
+                    index: index + 1, 
+                    existe: true,
+                    apostador: data.apostador || 'Outro apostador',
+                    numeros: apostasFormatadas[index]
+                };
+            }
+            return {index: index + 1, existe: false};
+        });
+    });
+    
+    // Aguardar todas as verificações
+    Promise.all(verificacoes)
+        .then(resultados => {
+            // Filtrar apenas as apostas repetidas
+            const repetidas = resultados.filter(r => r.existe);
+            
+            if (repetidas.length > 0) {
+                // Existem apostas repetidas
+                let mensagem = 'As seguintes apostas não podem ser registradas pois já existem no sistema:<br><ul>';
+                
+                repetidas.forEach(ap => {
+                    // Formatar os números para exibição
+                    const numerosExibicao = ap.numeros.split(',').map(n => {
+                        return n.toString().padStart(2, '0');
+                    }).join(' ');
+                    
+                    mensagem += `<li>Aposta #${ap.index}: ${numerosExibicao} - já apostada por ${ap.apostador}</li>`;
+                });
+                
+                mensagem += '</ul>Não são permitidas apostas com a mesma sequência de números.';
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Apostas repetidas',
+                    html: mensagem
+                });
+            } else {
+                // Se não houver apostas repetidas, enviar o formulário
+                this.submit();
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao verificar apostas:', error);
+            // Em caso de erro na verificação, permite o envio do formulário
+            // O backend fará a validação final
+            this.submit();
+        });
 });
 
 // Substituir seleção manual por processamento do textarea

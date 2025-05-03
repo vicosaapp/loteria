@@ -226,18 +226,8 @@ ob_start();
                 <p class="text-white-50 mb-0">Resultados das Loterias para Revendedores</p>
             </div>
             <div class="d-flex gap-2">
-                <button type="button" class="btn btn-light" id="btnInserirResultado">
-                    <i class="fas fa-plus me-2"></i>Inserir Resultado
-                </button>
-                <button type="button" class="btn btn-light" id="btnProcessarGanhadores">
-                    <i class="fas fa-users me-2"></i>Processar Ganhadores
-                </button>
-                <button type="button" class="btn btn-light" id="btnAtualizarResultados">
-                    <i class="fas fa-sync-alt me-2"></i>Atualizar Resultados
-                </button>
-                <a href="ajax/corrigir_estrutura_tabelas.php" target="_blank" class="btn btn-secondary ms-2">
-                    <i class="fas fa-database me-2"></i>Corrigir DB
-                </a>
+                
+                
             </div>
         </div>
     </div>
@@ -535,26 +525,11 @@ ob_start();
 
 <!-- Botão para abrir o modal -->
 <div class="d-flex justify-content-end mb-4">
-  <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalInserirResultado">
-    <i class="fas fa-plus-circle me-2"></i>Inserir Novo Resultado
-  </button>
+
 </div>
 
 <!-- Botões de ação -->
-<div class="mb-4 text-center">
-    <button id="btnProcessarGanhadores" class="btn btn-primary me-2">
-        <i class="fas fa-sync me-1"></i> Processar Ganhadores
-    </button>
-    <button id="btnProcessarApostasImportadas" class="btn btn-success me-2">
-        <i class="fas fa-file-import me-1"></i> Processar Apostas Importadas
-    </button>
-    <button id="btnAtualizarResultados" class="btn btn-info me-2">
-        <i class="fas fa-cloud-download-alt me-1"></i> Atualizar da API
-    </button>
-    <button id="btnCorrigirBD" class="btn btn-warning">
-        <i class="fas fa-tools me-1"></i> Corrigir Banco de Dados
-    </button>
-</div>
+
 
 <style>
 /* Estilos específicos para a página de resultados */
