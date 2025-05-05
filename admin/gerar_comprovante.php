@@ -193,76 +193,82 @@ $html = '<!DOCTYPE html>
         body { 
             font-family: Arial, sans-serif; 
             line-height: 1.6; 
-            margin: 40px; 
-            background-color: #f8f9fa;
+            margin: 0; 
+            padding: 20px;
+            background-color: #f5f5f5;
         }
         .comprovante { 
-            max-width: 800px; 
+            max-width: 400px; 
             margin: 0 auto; 
-            border: 2px solid #007bff; 
-            padding: 20px; 
-            background-color: white;
+            background-color: #ffe45c;
+            padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
         }
-        .header { 
+        .comprovante::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 100 100\'%3E%3Ccircle cx=\'50\' cy=\'50\' r=\'40\' fill=\'%23fed930\' opacity=\'0.3\'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 80px;
+            opacity: 0.5;
+            z-index: 0;
+        }
+        .logo-container {
             text-align: center; 
-            border-bottom: 2px solid #007bff; 
-            padding-bottom: 20px; 
-            margin-bottom: 20px; 
+            margin-bottom: 15px; 
+            position: relative; 
+            z-index: 1;
         }
-        .header h1 { 
-            color: #007bff; 
-            margin: 0; 
-        }
-        .info-grupo { 
-            margin-bottom: 20px; 
-        }
-        .info-grupo h2 { 
-            color: #0056b3; 
-            border-bottom: 1px solid #eee;
-            padding-bottom: 5px;
+        .logo-img {
+            max-width: 150px; 
+            height: auto;
         }
         .info-item { 
-            margin-bottom: 10px; 
+            margin-bottom: 8px; 
             display: flex;
+            position: relative;
+            z-index: 1;
         }
         .info-label { 
             font-weight: bold; 
-            color: #555; 
-            width: 150px;
+            width: 160px;
+            font-size: 14px;
             flex-shrink: 0;
         }
         .info-value {
+            font-size: 14px;
             flex-grow: 1;
-        }
-        .jogo-container {
-            margin-bottom: 30px;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            padding: 15px;
-            background: #f9f9f9;
-        }
-        .jogo-header {
             font-weight: bold;
-            color: #0056b3;
-            font-size: 18px;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 5px;
         }
-        .aposta-container {
-            margin-bottom: 15px;
-            padding: 10px;
-            background: white;
-            border-radius: 5px;
-            border-left: 3px solid #007bff;
+        .divisor {
+            border-top: 1px dashed #aaa;
+            margin: 15px 0;
+            position: relative;
+            z-index: 1;
+        }
+        .jogo-nome {
+            text-align: center;
+            font-size: 22px;
+            font-weight: bold;
+            margin: 15px 0;
+            position: relative;
+            z-index: 1;
         }
         .numeros { 
             display: flex; 
             flex-wrap: wrap; 
-            gap: 8px; 
-            margin-top: 10px; 
+            gap: 4px; 
+            justify-content: center;
+            margin: 10px 0 15px 0;
+            position: relative;
+            z-index: 1;
         }
         .numero { 
             width: 36px; 
@@ -270,38 +276,36 @@ $html = '<!DOCTYPE html>
             display: flex; 
             align-items: center; 
             justify-content: center;
-            background: #007bff; 
+            background: #6030b1; 
             color: white; 
             border-radius: 50%; 
             font-weight: bold;
-            font-size: 14px;
+            font-size: 15px;
         }
         .footer { 
-            margin-top: 30px; 
+            margin-top: 20px; 
             text-align: center; 
-            padding-top: 20px; 
-            border-top: 1px solid #ddd;
-            color: #666; 
             font-size: 14px;
+            color: #555;
+            position: relative;
+            z-index: 1;
         }
-        .aposta-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-        .aposta-valor {
-            font-weight: bold;
-            color: #28a745;
+        .bottom-info {
+            margin-top: 20px;
+            position: relative;
+            z-index: 1;
         }
         @media print {
             body {
                 margin: 0;
+                padding: 0;
                 background: none;
             }
             .comprovante {
                 box-shadow: none;
-                border: 1px solid #ddd;
+                width: 100%;
+                max-width: none;
+                border-radius: 0;
             }
             .no-print {
                 display: none;
@@ -311,114 +315,129 @@ $html = '<!DOCTYPE html>
 </head>
 <body>
     <div class="comprovante">
-        <div class="header">
-            <h1>Comprovante de Apostas</h1>
-            <p>Sistema de Loteria</p>
-        </div>
-        
-        <div class="info-grupo">
-            <h2>Dados do Apostador</h2>
-            <div class="info-item">
-                <span class="info-label">Nome:</span>
-                <span class="info-value">' . htmlspecialchars($cliente['nome']) . '</span>
-            </div>';
-
-if ($cliente['email']) {
-    $html .= '
-            <div class="info-item">
-                <span class="info-label">Email:</span>
-                <span class="info-value">' . htmlspecialchars($cliente['email']) . '</span>
-            </div>';
-}
-
-if ($cliente['whatsapp']) {
-    $html .= '
-            <div class="info-item">
-                <span class="info-label">WhatsApp:</span>
-                <span class="info-value">' . htmlspecialchars($cliente['whatsapp']) . '</span>
-            </div>';
-} else if ($cliente['telefone']) {
-    $html .= '
-            <div class="info-item">
-                <span class="info-label">Telefone:</span>
-                <span class="info-value">' . htmlspecialchars($cliente['telefone']) . '</span>
-            </div>';
-}
-
-$html .= '
-        </div>
-        
-        <div class="info-grupo">
-            <h2>Apostas Realizadas</h2>';
+        <div class="logo-container">
+            <img src="/img_app/logo.png" alt="Logo Loto Minas" class="logo-img">
+        </div>';
 
 // Para cada jogo, mostrar as apostas correspondentes
-foreach ($apostas_por_jogo as $jogo_nome => $apostas_jogo) {
-    $html .= '
-            <div class="jogo-container">
-                <div class="jogo-header">' . htmlspecialchars($jogo_nome) . '</div>';
+// Vamos exibir apenas a primeira aposta para simplificar
+if (!empty($apostas_por_jogo)) {
+    reset($apostas_por_jogo);
+    $jogo_nome = key($apostas_por_jogo);
+    $apostas_jogo = current($apostas_por_jogo);
+    $aposta = $apostas_jogo[0]; // Pegar a primeira aposta
     
-    foreach ($apostas_jogo as $aposta) {
-        // Processar os números da aposta
-        $numeros_array = explode("\n", $aposta['numeros']);
-        if (count($numeros_array) > 1 && !empty($numeros_array[0]) && !is_numeric(trim($numeros_array[0]))) {
-            // Provavelmente é uma aposta importada com cabeçalho
-            array_shift($numeros_array);
-        }
+    // Processar os números da aposta
+    $numeros_array = [];
+    if (strpos($aposta['numeros'], ',') !== false) {
+        $numeros_array = explode(',', $aposta['numeros']);
+    } else {
+        $numeros_array = preg_split('/\s+/', trim($aposta['numeros']));
+    }
+    $numeros_array = array_filter($numeros_array, 'is_numeric');
+    
+    // Gerar o ID único da aposta
+    $aposta_id = $aposta['id'];
+    
+    // Obter data e hora da aposta
+    $data_emissao = !empty($aposta['created_at']) 
+        ? date('d/m/Y H:i:s', strtotime($aposta['created_at'])) 
+        : date('d/m/Y H:i:s');
+    
+    // Buscar informações do concurso
+    $stmt = $pdo->prepare("
+        SELECT c.codigo, c.data_sorteio, COALESCE(j.premio, 1600.00) as premio_estimado
+        FROM jogos j
+        LEFT JOIN concursos c ON j.id = c.jogo_id AND c.status = 'pendente'
+        WHERE j.nome = ?
+        ORDER BY c.data_sorteio ASC
+        LIMIT 1
+    ");
+    $stmt->execute([$jogo_nome]);
+    $concurso_info = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    $concurso_numero = $concurso_info ? $concurso_info['codigo'] : 'N/A';
+    $data_sorteio = !empty($concurso_info['data_sorteio']) 
+        ? date('d/m/Y', strtotime($concurso_info['data_sorteio'])) 
+        : date('d/m/Y');
+    $hora_sorteio = !empty($concurso_info['data_sorteio']) 
+        ? date('H:i', strtotime($concurso_info['data_sorteio'])) 
+        : '20:00';
+    $premio_estimado = $concurso_info ? $concurso_info['premio_estimado'] : 1600.00;
+    
+    $html .= '
+        <div class="info-item">
+            <span class="info-label">ID APOSTA:</span>
+            <span class="info-value">' . $aposta_id . '</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">EMITIDO EM:</span>
+            <span class="info-value">' . $data_emissao . '</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">PARTICIPANTE:</span>
+            <span class="info-value">' . htmlspecialchars(strtoupper($cliente['nome'])) . '</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">CONCURSO:</span>
+            <span class="info-value">' . $concurso_numero . '</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">DATA DO SORTEIO:</span>
+            <span class="info-value">' . $data_sorteio . '</span>
+        </div>
+        <div class="info-item">
+            <span class="info-label">HORA DO SORTEIO:</span>
+            <span class="info-value">' . $hora_sorteio . '</span>
+        </div>
         
-        $numeros_html = '';
-        foreach ($numeros_array as $linha) {
-            // Remover espaços extras e dividir por espaços
-            $numeros = preg_split('/\s+/', trim($linha));
-            $numeros = array_filter($numeros, 'is_numeric');
-            
-            if (!empty($numeros)) {
-                $numeros_html .= '<div class="numeros">';
-                foreach ($numeros as $numero) {
-                    $numeros_html .= '<div class="numero">' . str_pad(trim($numero), 2, '0', STR_PAD_LEFT) . '</div>';
-                }
-                $numeros_html .= '</div>';
-            }
-        }
+        <div class="divisor"></div>
         
-        if (empty($numeros_html)) {
-            // Fallback para o formato anterior
-            $numeros = explode(',', $aposta['numeros']);
-            $numeros_html = '<div class="numeros">';
-            foreach ($numeros as $numero) {
-                if (is_numeric(trim($numero))) {
-                    $numeros_html .= '<div class="numero">' . str_pad(trim($numero), 2, '0', STR_PAD_LEFT) . '</div>';
-                }
-            }
-            $numeros_html .= '</div>';
-        }
+        <div class="jogo-nome">' . htmlspecialchars($jogo_nome) . '</div>
         
-        $html .= '
-                <div class="aposta-container">
-                    <div class="aposta-info">
-                        <span>Data: ' . date('d/m/Y H:i', strtotime($aposta['created_at'])) . '</span>
-                        <span class="aposta-valor">Valor: R$ ' . number_format($aposta['valor'], 2, ',', '.') . '</span>
-                    </div>
-                    ' . $numeros_html . '
-                </div>';
+        <div class="numeros">';
+    
+    foreach ($numeros_array as $numero) {
+        $numero_formatado = str_pad(trim($numero), 2, '0', STR_PAD_LEFT);
+        $html .= '<div class="numero">' . $numero_formatado . '</div>';
     }
     
     $html .= '
-            </div>';
-}
-
-$html .= '
+        </div>
+        
+        <div class="divisor"></div>
+        
+        <div class="bottom-info">
+            <div class="info-item">
+                <span class="info-label">QTD DEZENAS:</span>
+                <span class="info-value">' . count($numeros_array) . '</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">VALOR APOSTADO:</span>
+                <span class="info-value">R$ ' . number_format($aposta['valor'], 2, ',', '.') . '</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">É SURPRESINHA?:</span>
+                <span class="info-value">NÃO</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">GANHO MÁXIMO 15P:</span>
+                <span class="info-value">R$ ' . number_format($premio_estimado, 2, ',', '.') . '</span>
+            </div>
         </div>
         
         <div class="footer">
-            <p>Este comprovante é válido como confirmação das suas apostas.</p>
-            <p>Data de emissão: ' . date('d/m/Y H:i:s') . '</p>
-            <p class="no-print"><button onclick="window.print();" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Imprimir Comprovante</button></p>
-        </div>
+            <p>Aplicativo Loto Minas ( lotominas.site )</p>
+            <p class="no-print"><button onclick="window.print();" style="padding: 10px 20px; background: #6030b1; color: white; border: none; border-radius: 5px; cursor: pointer;">Imprimir Comprovante</button></p>
+        </div>';
+}
+
+$html .= '
     </div>
     
     <script>
         window.onload = function() {
-            // Imprimir automaticamente ao carregar
+            // Comentado para não imprimir automaticamente
             // window.print();
         }
     </script>
