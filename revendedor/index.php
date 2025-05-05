@@ -201,9 +201,7 @@ if (isset($_SESSION['usuario_id']) && $_SESSION['tipo'] === 'revendedor') {
 </head>
 <body>
     <!-- Botão para mostrar/esconder a barra lateral no mobile -->
-    <button class="toggle-sidebar d-md-none">
-        <i class="fas fa-bars"></i>
-    </button>
+
     
     <div class="login-container">
         <div class="login-header">

@@ -368,7 +368,7 @@ ob_start();
                 </div>
                 
                 <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit">
+                    <button type="submit" class="btn btn-primary btn-lg w-100" id="btnSubmit">
                         <i class="fas fa-save"></i> Confirmar Aposta
                     </button>
                 </div>
@@ -425,6 +425,14 @@ ob_start();
         width: 35px;
         height: 35px;
         font-size: 0.9rem;
+    }
+    
+    /* Garantir que o botão de confirmação seja visível completamente */
+    #btnSubmit {
+        margin-bottom: 70px; /* Espaço para não ser ocultado pela navegação móvel */
+        width: 100%;
+        font-size: 1rem;
+        padding: 10px;
     }
 }
 

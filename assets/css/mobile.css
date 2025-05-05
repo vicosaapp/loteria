@@ -174,4 +174,20 @@
     .cliente-card {
         margin-bottom: 15px;
     }
+    
+    /* Ajustes específicos para a página de importação de apostas */
+    #formAposta {
+        padding-bottom: 80px; /* Espaço adicional para o botão não ficar escondido */
+    }
+    
+    #formAposta .btn-lg {
+        width: 100%; /* Botão ocupa toda a largura */
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+    
+    /* Garantir que o conteúdo não fica escondido sob a navegação */
+    .card-body {
+        padding-bottom: 25px;
+    }
 } 
