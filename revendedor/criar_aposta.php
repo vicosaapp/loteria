@@ -49,8 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Validar a quantidade de números selecionados
         $numerosArray = explode(',', $numeros);
-        if (count($numerosArray) > 20) {
-            throw new Exception("Quantidade de números selecionados excede o limite permitido (máximo 20)");
+        if (count($numerosArray) > 50) {
+            throw new Exception("Quantidade de números selecionados excede o limite permitido (máximo 50)");
         }
         
         // Buscar informações do jogo para validar
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // Validar número máximo de dezenas (com limite absoluto de segurança)
-        $maxPermitido = min($jogo['maximo_numeros'], 20);
+        $maxPermitido = min($jogo['maximo_numeros'], 50);
         if (count($numerosArray) > $maxPermitido) {
             throw new Exception("Quantidade de números excede o máximo permitido. Máximo: " . $maxPermitido);
         }
@@ -354,6 +354,18 @@ ob_start();
         font-size: 0.9rem;
     }
 }
+
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}
+
+.shake-animation {
+    animation: shake 0.5s;
+}
 </style>
 
 <script>
@@ -429,7 +441,7 @@ function toggleNumero(element, numero) {
     
     if (index === -1) {
         // Define um limite máximo absoluto para evitar problemas
-        const limiteAbsoluto = 20;
+        const limiteAbsoluto = 50;
         const limiteEfetivo = Math.min(maxNumeros, limiteAbsoluto);
         
         // Se o número não está selecionado e não atingimos o máximo, adicione-o
@@ -442,25 +454,12 @@ function toggleNumero(element, numero) {
                                       valoresJogos[jogoAtual].some(v => parseInt(v.dezenas) === qtdFutura);
                 
                 if (!existemValores) {
-                    // Alertar o usuário mas permitir continuar
-                    if (typeof Swal !== 'undefined') {
-                        Swal.fire({
-                            icon: 'warning',
-                            title: 'Atenção',
-                            text: `Você está selecionando ${qtdFutura} números, mas pode não haver valores configurados para essa quantidade.`,
-                            showCancelButton: true,
-                            confirmButtonText: 'Continuar mesmo assim',
-                            cancelButtonText: 'Cancelar'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                // Adicionar o número se o usuário confirmar
-                                numerosSelected.push(numero);
-                                element.classList.add('selected');
-                                atualizarDisplayNumeros();
-                            }
-                        });
-                        return; // Sair da função para evitar adicionar automaticamente
-                    }
+                    // Adicionar o número mesmo sem valores configurados
+                    // Em vez de mostrar o modal, incluiremos esta verificação na função atualizarDisplayNumeros
+                    numerosSelected.push(numero);
+                    element.classList.add('selected');
+                    atualizarDisplayNumeros();
+                    return;
                 }
             }
             
@@ -468,16 +467,21 @@ function toggleNumero(element, numero) {
             numerosSelected.push(numero);
             element.classList.add('selected');
         } else {
-            // Verifica se SweetAlert2 está disponível e usa alert como fallback
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Limite atingido',
-                    text: `Você só pode selecionar até ${limiteEfetivo} números!`
-                });
-            } else {
-                alert(`Limite atingido! Você só pode selecionar até ${limiteEfetivo} números!`);
-            }
+            // Limite atingido - mostrar uma mensagem visual menos intrusiva
+            // Adicionar uma animação de "shake" ao elemento
+            element.classList.add('shake-animation');
+            
+            // Mostrar uma pequena mensagem temporária acima da grade de números
+            const selecaoInfo = document.getElementById('selecaoInfo');
+            selecaoInfo.textContent = `Limite de ${limiteEfetivo} números atingido!`;
+            selecaoInfo.classList.add('bg-warning');
+            
+            // Restaurar o texto original após 2 segundos
+            setTimeout(() => {
+                selecaoInfo.textContent = `Selecione de ${minNumeros} a ${maxNumeros} números`;
+                selecaoInfo.classList.remove('bg-warning');
+                element.classList.remove('shake-animation');
+            }, 2000);
         }
     } else {
         // Se o número já está selecionado, remova-o
@@ -575,17 +579,24 @@ function atualizarValoresDisponiveis(qtdNumeros) {
     if (valoresJogos[jogoAtual].length === 0) {
         valorSelect.innerHTML = '<option value="">Não há valores configurados para este jogo</option>';
         
-        // Mostrar alerta ao usuário
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Configuração incompleta',
-                text: 'Não existem valores configurados para este jogo. Por favor, entre em contato com o administrador.'
-            });
-        } else {
-            alert('Não existem valores configurados para este jogo. Por favor, entre em contato com o administrador.');
+        // Mostrar alerta inline em vez de modal
+        const alertEl = document.createElement('div');
+        alertEl.className = 'alert alert-warning mt-2';
+        alertEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Não existem valores configurados para este jogo. Por favor, entre em contato com o administrador.';
+        
+        const parentEl = valorSelect.parentElement.parentElement;
+        if (!parentEl.querySelector('.alert-warning')) {
+            parentEl.appendChild(alertEl);
         }
+        
         return;
+    }
+    
+    // Remover alertas anteriores, se existirem
+    const parentEl = valorSelect.parentElement.parentElement;
+    const alertaExistente = parentEl.querySelector('.alert-warning');
+    if (alertaExistente) {
+        parentEl.removeChild(alertaExistente);
     }
     
     // Filtrar valores para a quantidade de números selecionados
@@ -595,22 +606,16 @@ function atualizarValoresDisponiveis(qtdNumeros) {
         // Não há valores para a quantidade de números selecionados
         valorSelect.innerHTML = '<option value="">Não disponível para esta quantidade</option>';
         
-        // Se o usuário selecionou mais dezenas do que há configuração, mostrar um alerta mais específico
-        if (qtdNumeros > 20) { // assumindo que 20 é um limite razoável
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Muitos números selecionados',
-                    text: `Você selecionou ${qtdNumeros} números, mas não há valores configurados para essa quantidade. Selecione menos números.`,
-                    confirmButtonText: 'Entendi'
-                }).then(() => {
-                    // Sugestão: limitar a quantidade de números selecionáveis
-                    // limparSelecao(); // descomente esta linha se quiser limpar automaticamente
-                });
-            } else {
-                alert(`Você selecionou ${qtdNumeros} números, mas não há valores configurados para essa quantidade. Selecione menos números.`);
-            }
+        // Exibir mensagem de alerta inline em vez de modal
+        const alertEl = document.createElement('div');
+        alertEl.className = 'alert alert-warning mt-2';
+        alertEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> Você selecionou ${qtdNumeros} números, mas não há valores configurados para essa quantidade. Selecione menos números.`;
+        
+        // Adicionar apenas se não existe já um alerta
+        if (!parentEl.querySelector('.alert-warning')) {
+            parentEl.appendChild(alertEl);
         }
+        
         return;
     }
     
@@ -675,7 +680,7 @@ document.getElementById('formAposta').addEventListener('submit', function(e) {
     }
     
     // Verificação de limite máximo de números (20 é um limite razoável)
-    const limiteAbsoluto = 20;
+    const limiteAbsoluto = 50;
     if (numerosSelected.length > limiteAbsoluto) {
         if (typeof Swal !== 'undefined') {
             Swal.fire({
@@ -779,7 +784,7 @@ document.getElementById('formAposta').addEventListener('submit', function(e) {
 window.addEventListener('DOMContentLoaded', function() {
     // Verificar se há algo estranho salvo no localStorage
     try {
-        const limiteAbsoluto = 20;
+        const limiteAbsoluto = 50;
         const possiveisChaves = ['numerosLotomania', 'numerosSelecionados', 'loteriaNumerosSelected'];
         
         possiveisChaves.forEach(chave => {
