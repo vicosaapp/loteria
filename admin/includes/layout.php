@@ -238,6 +238,13 @@ $content = $content ?? '';
                             <span>Configurações</span>
                         </a>
                     </li>
+
+                    <li>
+                        <a href="gerenciar_concursos.php" class="<?php echo $currentPage == 'concursos' ? 'active' : ''; ?>">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Gerenciar Concursos</span>
+                        </a>
+                    </li>
                 </ul>
             </nav>
             
