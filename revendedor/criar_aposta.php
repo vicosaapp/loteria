@@ -504,11 +504,11 @@ function gerarNumerosAleatorios() {
     // Limpar seleção atual
     limparSelecao();
     
-    // Gerar números aleatórios baseados na quantidade mínima
+    // Gerar números aleatórios baseados na quantidade mínima do jogo selecionado
     const numerosPossiveis = Array.from({length: qtdDezenas}, (_, i) => i + 1);
     const numerosAleatorios = [];
     
-    // Escolher minNumeros aleatoriamente
+    // Escolher minNumeros aleatoriamente (minNumeros é atualizado dinamicamente pelo jogo)
     for (let i = 0; i < minNumeros; i++) {
         const indiceAleatorio = Math.floor(Math.random() * numerosPossiveis.length);
         numerosAleatorios.push(numerosPossiveis[indiceAleatorio]);

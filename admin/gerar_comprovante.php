@@ -76,7 +76,20 @@ $stmt->execute([$usuario_id]);
 $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$cliente) {
-    die("Cliente não encontrado");
+    // Tentar buscar em apostas
+    $stmt = $pdo->prepare("SELECT a.numeros, u.nome, u.email, u.whatsapp, u.telefone FROM apostas a JOIN usuarios u ON a.usuario_id = u.id WHERE a.usuario_id = ? LIMIT 1");
+    $stmt->execute([$usuario_id]);
+    $cliente = $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+if (!$cliente) {
+    // Não encontrou o cliente, usar um placeholder
+    $cliente = [
+        'nome' => 'Cliente não cadastrado',
+        'email' => '',
+        'whatsapp' => '',
+        'telefone' => ''
+    ];
 }
 
 // Buscar dados das apostas
@@ -88,8 +101,8 @@ try {
                 a.id,
                 a.usuario_id,
                 a.numeros,
-                a.valor_aposta/100 as valor,
-                a.valor_premio/100 as valor_premio,
+                a.valor_aposta as valor,
+                a.valor_premio as valor_premio,
                 a.created_at,
                 j.nome as jogo_nome
             FROM 
@@ -108,8 +121,8 @@ try {
                     a.id,
                     a.usuario_id,
                     a.numeros,
-                    a.valor_aposta/100 as valor,
-                    a.valor_premio/100 as valor_premio,
+                    a.valor_aposta as valor,
+                    a.valor_premio as valor_premio,
                     a.created_at,
                     j.nome as jogo_nome
                 FROM 
@@ -128,8 +141,8 @@ try {
                     ai.id,
                     ai.usuario_id,
                     ai.numeros,
-                    ai.valor_aposta/100 as valor,
-                    ai.valor_premio/100 as valor_premio,
+                    ai.valor_aposta as valor,
+                    ai.valor_premio as valor_premio,
                     ai.created_at,
                     ai.jogo_nome
                 FROM 
@@ -149,8 +162,8 @@ try {
                 a.id,
                 a.usuario_id,
                 a.numeros,
-                a.valor_aposta/100 as valor,
-                a.valor_premio/100 as valor_premio,
+                a.valor_aposta as valor,
+                a.valor_premio as valor_premio,
                 a.created_at,
                 j.nome as jogo_nome
             FROM 
@@ -346,7 +359,7 @@ if (!empty($apostas_por_jogo)) {
     
     // Buscar informações do concurso
     $stmt = $pdo->prepare("
-        SELECT c.codigo, c.data_sorteio, COALESCE(j.premio, 1600.00) as premio_estimado
+        SELECT c.codigo, c.data_sorteio
         FROM jogos j
         LEFT JOIN concursos c ON j.id = c.jogo_id AND c.status = 'pendente'
         WHERE j.nome = ?
@@ -363,7 +376,9 @@ if (!empty($apostas_por_jogo)) {
     $hora_sorteio = !empty($concurso_info['data_sorteio']) 
         ? date('H:i', strtotime($concurso_info['data_sorteio'])) 
         : '20:00';
-    $premio_estimado = $concurso_info ? $concurso_info['premio_estimado'] : 1600.00;
+    
+    // Usar o valor_premio da aposta específica
+    $premio_estimado = $aposta['valor_premio'];
     
     $html .= '
         <div class="info-item">
@@ -417,11 +432,7 @@ if (!empty($apostas_por_jogo)) {
                 <span class="info-value">R$ ' . number_format($aposta['valor'], 2, ',', '.') . '</span>
             </div>
             <div class="info-item">
-                <span class="info-label">É SURPRESINHA?:</span>
-                <span class="info-value">NÃO</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">GANHO MÁXIMO 15P:</span>
+                <span class="info-label">VALOR DO PRÊMIO:</span>
                 <span class="info-value">R$ ' . number_format($premio_estimado, 2, ',', '.') . '</span>
             </div>
         </div>
