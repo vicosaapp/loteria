@@ -210,7 +210,13 @@ $content = $content ?? '';
                             <span>Resultados</span>
                         </a>
                     </li>
-                    
+                    <li>
+                        <a href="gerenciar_concursos.php" class="<?php echo $currentPage == 'concursos' ? 'active' : ''; ?>">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Gerenciar Concursos</span>
+                        </a>
+                    </li>
+                </ul>
                     <li>
                         <a href="gerenciar_apostas.php" class="<?php echo $currentPage == 'apostas' ? 'active' : ''; ?>">
                             <i class="fas fa-ticket-alt"></i>
@@ -239,13 +245,6 @@ $content = $content ?? '';
                         </a>
                     </li>
 
-                    <li>
-                        <a href="gerenciar_concursos.php" class="<?php echo $currentPage == 'concursos' ? 'active' : ''; ?>">
-                            <i class="fas fa-calendar-alt"></i>
-                            <span>Gerenciar Concursos</span>
-                        </a>
-                    </li>
-                </ul>
             </nav>
             
             <div class="sidebar-footer">

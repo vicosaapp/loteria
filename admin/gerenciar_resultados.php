@@ -1,7 +1,6 @@
 <?php
 require_once '../includes/verificar_manutencao.php';
 require_once '../config/database.php';
-require_once 'includes/header.php';
 
 // Verifica se é admin
 if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
@@ -249,8 +248,9 @@ try {
     $mensagem = "Erro: " . $e->getMessage();
     $tipo_mensagem = "danger";
 }
-?>
 
+ob_start();
+?>
 <div class="container-fluid py-4">
     <!-- Cabeçalho da página -->
     <div class="page-header">
@@ -2281,5 +2281,7 @@ window.addEventListener('click', function(e) {
 });
 </script>
 
-</body>
-</html> 
+<?php
+$content = ob_get_clean();
+require_once 'includes/layout.php';
+?> 

@@ -17,9 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
     if ($jogo_id && $codigo && $data_sorteio) {
         $stmt = $pdo->prepare("INSERT INTO concursos (jogo_id, codigo, data_sorteio, status) VALUES (?, ?, ?, ?)");
         $stmt->execute([$jogo_id, $codigo, $data_sorteio, $status]);
-        $msg = 'Concurso cadastrado com sucesso!';
+        header('Location: gerenciar_concursos.php?msg=Concurso+cadastrado+com+sucesso!');
+        exit();
     } else {
-        $msg = 'Preencha todos os campos.';
+        header('Location: gerenciar_concursos.php?msg=Preencha+todos+os+campos.');
+        exit();
     }
 }
 
@@ -27,7 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao']) && $_POST['ac
 if (isset($_GET['excluir']) && is_numeric($_GET['excluir'])) {
     $stmt = $pdo->prepare("DELETE FROM concursos WHERE id = ?");
     $stmt->execute([$_GET['excluir']]);
-    $msg = 'Concurso excluído com sucesso!';
+    header('Location: gerenciar_concursos.php?msg=Concurso+exclu%C3%ADdo+com+sucesso!');
+    exit();
 }
 
 // Buscar jogos
@@ -42,8 +45,8 @@ ob_start();
 ?>
 <div class="container py-4">
     <h1 class="mb-4">Gerenciar Concursos</h1>
-    <?php if (isset($msg)): ?>
-        <div class="alert alert-info"> <?= htmlspecialchars($msg) ?> </div>
+    <?php if (isset($_GET['msg'])): ?>
+        <div class="alert alert-info"> <?= htmlspecialchars($_GET['msg']) ?> </div>
     <?php endif; ?>
     <div class="card mb-4">
         <div class="card-body">
