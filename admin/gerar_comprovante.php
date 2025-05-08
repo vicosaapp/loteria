@@ -357,25 +357,31 @@ if (!empty($apostas_por_jogo)) {
         ? date('d/m/Y H:i:s', strtotime($aposta['created_at'])) 
         : date('d/m/Y H:i:s');
     
-    // Buscar informações do concurso
-    $stmt = $pdo->prepare("
-        SELECT c.codigo, c.data_sorteio
-        FROM jogos j
-        LEFT JOIN concursos c ON j.id = c.jogo_id AND c.status = 'pendente'
-        WHERE j.nome = ?
-        ORDER BY c.data_sorteio ASC
-        LIMIT 1
-    ");
-    $stmt->execute([$jogo_nome]);
-    $concurso_info = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Buscar o número do concurso diretamente da aposta, se existir
+    $concurso_numero = isset($aposta['concurso']) && !empty($aposta['concurso']) ? $aposta['concurso'] : null;
+    $data_sorteio = null;
+    $hora_sorteio = null;
     
-    $concurso_numero = $concurso_info ? $concurso_info['codigo'] : 'N/A';
-    $data_sorteio = !empty($concurso_info['data_sorteio']) 
-        ? date('d/m/Y', strtotime($concurso_info['data_sorteio'])) 
-        : date('d/m/Y');
-    $hora_sorteio = !empty($concurso_info['data_sorteio']) 
-        ? date('H:i', strtotime($concurso_info['data_sorteio'])) 
-        : '20:00';
+    if (!$concurso_numero) {
+        // Buscar informações do concurso se não existir na aposta
+        $stmt = $pdo->prepare("
+            SELECT c.codigo, c.data_sorteio
+            FROM jogos j
+            LEFT JOIN concursos c ON j.id = c.jogo_id AND c.status = 'pendente'
+            WHERE j.nome = ?
+            ORDER BY c.data_sorteio ASC
+            LIMIT 1
+        ");
+        $stmt->execute([$jogo_nome]);
+        $concurso_info = $stmt->fetch(PDO::FETCH_ASSOC);
+        $concurso_numero = $concurso_info ? $concurso_info['codigo'] : 'N/A';
+        $data_sorteio = !empty($concurso_info['data_sorteio']) 
+            ? date('d/m/Y', strtotime($concurso_info['data_sorteio'])) 
+            : date('d/m/Y');
+        $hora_sorteio = !empty($concurso_info['data_sorteio']) 
+            ? date('H:i', strtotime($concurso_info['data_sorteio'])) 
+            : '20:00';
+    }
     
     // Usar o valor_premio da aposta específica
     $premio_estimado = $aposta['valor_premio'];
