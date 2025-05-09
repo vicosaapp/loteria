@@ -1865,7 +1865,40 @@ function fecharModal() {
 function handleNumeroClick(e) {
     e.preventDefault();
     e.stopPropagation();
-    this.classList.toggle('selected');
+
+    const selecionados = document.querySelectorAll('.numero-btn.selected').length;
+    const jogoSelect = document.getElementById('jogo_id');
+    let maxNumerosPermitidos = 15; // Padrão para lotofácil
+
+    if (jogoSelect && jogoSelect.selectedIndex > 0) {
+        const jogoNome = jogoSelect.options[jogoSelect.selectedIndex]?.text.toLowerCase() || '';
+        if (jogoNome.includes('lotomania')) {
+            maxNumerosPermitidos = 20;
+        } else if (jogoNome.includes('lotofácil') || jogoNome.includes('lotofacil')) {
+            maxNumerosPermitidos = 15;
+        } else if (jogoNome.includes('quina')) {
+            maxNumerosPermitidos = 5;
+        } else if (jogoNome.includes('mega') || jogoNome.includes('sena')) {
+            maxNumerosPermitidos = 6;
+        } else if (jogoNome.includes('dia de sorte')) {
+            maxNumerosPermitidos = 7;
+        } else if (jogoNome.includes('timemania')) {
+            maxNumerosPermitidos = 10;
+        }
+    }
+
+    if (!this.classList.contains('selected')) {
+        if (selecionados < maxNumerosPermitidos) {
+            this.classList.add('selected');
+        } else {
+            // Opcional: alertar o usuário que o limite foi atingido
+            // alert(`Você já selecionou o máximo de ${maxNumerosPermitidos} números.`);
+            console.log(`Limite de ${maxNumerosPermitidos} números atingido.`);
+        }
+    } else {
+        this.classList.remove('selected');
+    }
+
     atualizarSelecao();
     return false;
 }
@@ -1902,32 +1935,32 @@ function atualizarSelecao() {
         input.value = numeros.join(',');
     }
 
-    // Obter jogo selecionado para validar quantidade mínima
+    // Obter jogo selecionado para determinar o total de números para o contador
     const jogoSelect = document.getElementById('jogo_id');
-    let minNumeros = 15; // Padrão para lotofácil
+    let totalNumerosJogo = 15; // Padrão para lotofácil (usado para o Y em X/Y)
 
     if (jogoSelect && jogoSelect.selectedIndex > 0) {
         const jogoNome = jogoSelect.options[jogoSelect.selectedIndex]?.text.toLowerCase() || '';
         
         if (jogoNome.includes('lotomania')) {
-            minNumeros = 20;
+            totalNumerosJogo = 20;
         } else if (jogoNome.includes('lotofácil') || jogoNome.includes('lotofacil')) {
-            minNumeros = 15;
+            totalNumerosJogo = 15;
         } else if (jogoNome.includes('quina')) {
-            minNumeros = 5;
+            totalNumerosJogo = 5;
         } else if (jogoNome.includes('mega') || jogoNome.includes('sena')) {
-            minNumeros = 6;
+            totalNumerosJogo = 6;
         } else if (jogoNome.includes('dia de sorte')) {
-            minNumeros = 7;
+            totalNumerosJogo = 7;
         } else if (jogoNome.includes('timemania')) {
-            minNumeros = 10;
+            totalNumerosJogo = 10;
         }
     }
 
     // Atualizar contador
     const contadorEl = document.getElementById('contador_numeros');
     if (contadorEl) {
-        contadorEl.textContent = `${numeros.length}/${minNumeros}`;
+        contadorEl.textContent = `${numeros.length}/${totalNumerosJogo}`;
     }
 }
 
