@@ -101,10 +101,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Aposta " . ($idx + 1) . " possui menos números que o mínimo permitido (" . $jogo['minimo_numeros'] . ")");
             }
             
-            // Validar número máximo de dezenas (com limite absoluto de segurança)
-            $maxPermitido = min($jogo['maximo_numeros'], 20);
+            // Validar número máximo de dezenas
+            $maxPermitido = $jogo['maximo_numeros'];
             if (count($numerosArray) > $maxPermitido) {
-                throw new Exception("Aposta " . ($idx + 1) . " excede o máximo permitido (" . $maxPermitido . " números)");
+                throw new Exception("Aposta " . ($idx + 1) . " excede o máximo permitido (" . $maxPermitido . " números) para o jogo selecionado.");
             }
             
             // Verificar se existem valores configurados para a quantidade de números selecionados
@@ -605,9 +605,6 @@ document.getElementById('formAposta').addEventListener('submit', function(e) {
         }
         if (numeros.length > maxNumeros) {
             erro = `Aposta ${idx+1} possui mais números que o máximo permitido (${maxNumeros}).`;
-        }
-        if (numeros.length > 20) {
-            erro = `Aposta ${idx+1} excede o limite absoluto de 20 números.`;
         }
     });
     if (erro) {
