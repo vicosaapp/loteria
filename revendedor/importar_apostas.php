@@ -178,6 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Inserir cada aposta como um registro separado
             foreach ($apostas as $index => $aposta) {
+                error_log("REVENDEDOR_IMPORTAR_APOSTAS: Comprimento da string da aposta #".($index + 1)." ('".$aposta."'): " . strlen($aposta));
                 $stmt = $pdo->prepare("
                     INSERT INTO apostas (
                         usuario_id, 
@@ -365,12 +366,17 @@ ob_start();
                             <small class="text-muted">Valor do Prêmio: <span id="valorPremiacao">R$ 0,00</span></small>
                         </div>
                     </div>
+                    <div class="col-md-6 mt-3">
+                        <label class="form-label">Valor/Prêmio Indicativo:</label>
+                        <div id="indicacao-valor-premio" class="alert alert-info" role="alert">
+                            Selecione as dezenas para ver a indicação.
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <button type="submit" class="btn btn-primary btn-lg w-100" id="btnSubmit">
-                        <i class="fas fa-save"></i> Confirmar Aposta
-                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg" id="btnSubmit"> <i class="fas fa-save"></i> Confirmar Aposta </button>
+                    <button type="button" class="btn btn-success btn-lg ms-2" id="btnEnviarWhatsApp"> <i class="fab fa-whatsapp"></i> Enviar por WhatsApp </button>
                 </div>
             </form>
         </div>
@@ -814,6 +820,55 @@ function limparCacheLocal() {
         timer: 2000
     });
 }
+
+// Função para enviar apostas por WhatsApp
+function enviarApostasPorWhatsApp() {
+    const clienteSelect = document.getElementById('cliente_id');
+    const jogoSelect = document.getElementById('jogo_id');
+    const apostasTextarea = document.getElementById('apostasTextarea');
+
+    if (clienteSelect.value === "") {
+        Swal.fire('Erro', 'Por favor, selecione um cliente.', 'error');
+        return;
+    }
+    if (jogoSelect.value === "") {
+        Swal.fire('Erro', 'Por favor, selecione um jogo.', 'error');
+        return;
+    }
+    if (apostasTextarea.value.trim() === "") {
+        Swal.fire('Erro', 'Por favor, cole as apostas.', 'error');
+        return;
+    }
+
+    const nomeCliente = clienteSelect.options[clienteSelect.selectedIndex].text;
+    const nomeJogo = jogoSelect.options[jogoSelect.selectedIndex].text;
+    const apostas = apostasTextarea.value.trim();
+    const valorApostaSelect = document.getElementById('valor_aposta');
+    const valorAposta = valorApostaSelect.options[valorApostaSelect.selectedIndex].text;
+
+
+    let mensagem = `*Nova Aposta*\n\n`;
+    mensagem += `*Cliente:* ${nomeCliente}\n`;
+    mensagem += `*Jogo:* ${nomeJogo}\n`;
+    if (valorAposta && valorAposta !== "Selecione o valor") {
+        mensagem += `*Valor por Aposta:* ${valorAposta}\n`;
+    }
+    mensagem += `\n*Apostas:*\n${apostas}\n\n`;
+    mensagem += `Por favor, confirme o recebimento.`;
+
+    const numeroWhatsApp = "5535997815465"; // Seu número fornecido com o código do país
+    const urlWhatsApp = `https://wa.me/${numeroWhatsApp}?text=${encodeURIComponent(mensagem)}`;
+
+    window.open(urlWhatsApp, '_blank');
+}
+
+// Adicionar listener ao novo botão
+document.addEventListener('DOMContentLoaded', (event) => {
+    const btnWhatsApp = document.getElementById('btnEnviarWhatsApp');
+    if(btnWhatsApp) {
+        btnWhatsApp.addEventListener('click', enviarApostasPorWhatsApp);
+    }
+});
 </script>
 
 <?php

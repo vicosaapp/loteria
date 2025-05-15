@@ -1828,7 +1828,7 @@ document.addEventListener('keydown', function(event) {
 });
 
 function gerarComprovante(usuarioId, jogoNome) {
-    window.open(`gerar_comprovante.php?usuario_id=${usuarioId}&jogo=${encodeURIComponent(jogoNome)}`, '_blank');
+    window.open(`gerar_comprovante.php?usuario_id=${usuarioId}&jogo=${encodeURIComponent(jogoNome)}&formato=pdf`, '_blank');
 }
 </script>
 

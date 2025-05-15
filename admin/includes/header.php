@@ -86,6 +86,9 @@ if (!isset($_SESSION['usuario_id']) || $_SESSION['tipo'] !== 'admin') {
             <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'gerenciar_apostas.php' ? 'active' : ''; ?>" href="gerenciar_apostas.php">
                 <i class="fas fa-ticket-alt"></i> Gerenciar Apostas
             </a>
+            <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'enviar_comprovantes_whatsapp.php' ? 'active' : ''; ?>" href="enviar_comprovantes_whatsapp.php">
+                <i class="fab fa-whatsapp"></i> Enviar Comprovantes
+            </a>
             <a class="nav-link <?php echo basename($_SERVER['PHP_SELF']) == 'usuarios.php' ? 'active' : ''; ?>" href="usuarios.php">
                 <i class="fas fa-users"></i> Usuários
             </a>

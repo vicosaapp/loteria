@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecionando...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 100px;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #28a745;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h2>Redirecionando para o sistema...</h2>
+    <div class="loader"></div>
+    <p>Aguarde um momento, você será redirecionado automaticamente.</p>
+    
+    <script>
+        // Redirecionar para a página principal após 1 segundo
+        setTimeout(function() {
+            window.location.href = "enviar_comprovantes_whatsapp.php";
+        }, 1000);
+    </script>
+</body>
+</html> 

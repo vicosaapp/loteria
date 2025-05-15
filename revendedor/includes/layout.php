@@ -96,6 +96,11 @@ $config_cache = '?v=' . time();
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $currentPage == 'enviar_comprovantes' ? 'active' : '' ?>" href="enviar_comprovantes_whatsapp.php">
+                    <i class="fab fa-whatsapp"></i> Enviar Comprovantes
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link" href="logout.php">
                     <i class="fas fa-sign-out-alt"></i> Sair
                 </a>
@@ -129,6 +134,10 @@ $config_cache = '?v=' . time();
         <a href="resultados.php" class="mobile-nav-item <?= $currentPage == 'resultados' ? 'active' : '' ?>">
             <i class="fas fa-trophy"></i>
             <span>Resultados</span>
+        </a>
+        <a href="enviar_comprovantes_whatsapp.php" class="mobile-nav-item <?= $currentPage == 'enviar_comprovantes' ? 'active' : '' ?>">
+            <i class="fab fa-whatsapp"></i>
+            <span>Comprovantes</span>
         </a>
     </div>
     

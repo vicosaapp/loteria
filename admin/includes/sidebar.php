@@ -30,10 +30,27 @@
                     Resultados
                 </a>
                 
-                <a class="nav-link <?php echo ($currentPage == 'apostas') ? 'active' : ''; ?>" href="gerenciar_apostas.php">
+                <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseApostas" aria-expanded="false" aria-controls="collapseApostas">
                     <div class="sb-nav-link-icon"><i class="fas fa-ticket-alt"></i></div>
                     Apostas
+                    <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                 </a>
+                <div class="collapse" id="collapseApostas" aria-labelledby="headingOne" data-bs-parent="#sidenavAccordion">
+                    <nav class="sb-sidenav-menu-nested nav">
+                        <a class="nav-link <?php echo ($currentPage == 'apostas') ? 'active' : ''; ?>" href="gerenciar_apostas.php">
+                            <div class="sb-nav-link-icon"><i class="fas fa-list"></i></div>
+                            Todas as Apostas
+                        </a>
+                        <a class="nav-link <?php echo ($currentPage == 'apostas_pendentes') ? 'active' : ''; ?>" href="apostas_pendentes.php">
+                            <div class="sb-nav-link-icon"><i class="fas fa-clock"></i></div>
+                            Apostas Pendentes
+                        </a>
+                        <a class="nav-link <?php echo ($currentPage == 'logs_comprovantes') ? 'active' : ''; ?>" href="logs_comprovantes.php">
+                            <div class="sb-nav-link-icon"><i class="fas fa-file-alt"></i></div>
+                            Logs de Comprovantes
+                        </a>
+                    </nav>
+                </div>
                 
                 <a class="nav-link <?php echo ($currentPage == 'valores') ? 'active' : ''; ?>" href="valores_jogos.php">
                     <div class="sb-nav-link-icon"><i class="fas fa-dollar-sign"></i></div>
@@ -47,10 +64,23 @@
                     Configurações
                 </a>
                 
-                <a class="nav-link" href="scripts/atualizar_db.php">
-                    <div class="sb-nav-link-icon"><i class="fas fa-database"></i></div>
-                    Atualizar Banco de Dados
+                <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseUtilidades" aria-expanded="false" aria-controls="collapseUtilidades">
+                    <div class="sb-nav-link-icon"><i class="fas fa-tools"></i></div>
+                    Utilitários
+                    <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                 </a>
+                <div class="collapse" id="collapseUtilidades" aria-labelledby="headingOne" data-bs-parent="#sidenavAccordion">
+                    <nav class="sb-sidenav-menu-nested nav">
+                        <a class="nav-link" href="scripts/atualizar_db.php">
+                            <div class="sb-nav-link-icon"><i class="fas fa-database"></i></div>
+                            Atualizar Banco de Dados
+                        </a>
+                        <a class="nav-link" href="instalar_fila_comprovantes.php">
+                            <div class="sb-nav-link-icon"><i class="fas fa-envelope"></i></div>
+                            Instalar Fila de Comprovantes
+                        </a>
+                    </nav>
+                </div>
             </div>
         </div>
         <div class="sb-sidenav-footer">
