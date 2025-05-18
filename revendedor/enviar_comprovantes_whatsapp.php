@@ -9,6 +9,44 @@
 session_start();
 require_once '../config/database.php';
 
+// Verificar a conexão com o banco de dados e as tabelas necessárias
+try {
+    // Verificar conexão com o banco
+    $pdo->query("SELECT 1");
+    error_log("Conexão com o banco de dados OK");
+    
+    // Verificar se as tabelas necessárias existem
+    $tabelas_necessarias = ['apostas', 'usuarios', 'jogos'];
+    $tabelas_faltando = [];
+    
+    foreach ($tabelas_necessarias as $tabela) {
+        if ($pdo->query("SHOW TABLES LIKE '{$tabela}'")->rowCount() == 0) {
+            $tabelas_faltando[] = $tabela;
+            error_log("ERRO: Tabela '{$tabela}' não encontrada no banco de dados");
+        }
+    }
+    
+    if (!empty($tabelas_faltando)) {
+        error_log("ALERTA: As seguintes tabelas estão faltando: " . implode(", ", $tabelas_faltando));
+    } else {
+        error_log("Todas as tabelas necessárias estão presentes");
+        
+        // Verificar se há apostas na tabela
+        $total_apostas = $pdo->query("SELECT COUNT(*) FROM apostas")->fetchColumn();
+        error_log("Total de apostas no sistema: {$total_apostas}");
+        
+        // Verificar usuários
+        $total_usuarios = $pdo->query("SELECT COUNT(*) FROM usuarios")->fetchColumn();
+        error_log("Total de usuários no sistema: {$total_usuarios}");
+        
+        // Verificar jogos
+        $total_jogos = $pdo->query("SELECT COUNT(*) FROM jogos")->fetchColumn();
+        error_log("Total de jogos no sistema: {$total_jogos}");
+    }
+} catch (PDOException $e) {
+    error_log("ERRO CRÍTICO com o banco de dados: " . $e->getMessage());
+}
+
 // CORREÇÃO: Limpeza forçada de estados para evitar aberturas automáticas do modal
 // Verificar se é um acesso direto à página (sem POST)
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -758,8 +796,33 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($parametros);
     $apostas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Adicionar depuração para verificar o que está acontecendo
+    error_log("Consulta SQL: " . $sql);
+    error_log("Parâmetros: " . print_r($parametros, true));
+    error_log("Total de apostas encontradas: " . count($apostas));
+    
+    // Se não encontrou apostas, vamos verificar se as tabelas existem
+    if (empty($apostas)) {
+        // Verificar se a tabela apostas existe
+        $table_exists = $pdo->query("SHOW TABLES LIKE 'apostas'")->rowCount() > 0;
+        error_log("Tabela 'apostas' existe: " . ($table_exists ? 'Sim' : 'Não'));
+        
+        // Verificar se há registros na tabela apostas
+        if ($table_exists) {
+            $total_apostas = $pdo->query("SELECT COUNT(*) FROM apostas")->fetchColumn();
+            error_log("Total de registros na tabela apostas: " . $total_apostas);
+            
+            // Verificar se há apostas para este revendedor
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM apostas WHERE revendedor_id = ?");
+            $stmt->execute([$revendedor_id]);
+            $apostas_revendedor = $stmt->fetchColumn();
+            error_log("Total de apostas para o revendedor ID {$revendedor_id}: " . $apostas_revendedor);
+        }
+    }
 } catch (PDOException $e) {
     $erro = "Erro ao buscar apostas: " . $e->getMessage();
+    error_log("Erro na consulta SQL: " . $e->getMessage());
     $apostas = [];
 }
 
@@ -783,8 +846,29 @@ try {
     ");
     $stmt->execute([$revendedor_id]);
     $apostadores = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    
+    // Adicionar depuração para apostadores
+    error_log("Total de apostadores encontrados: " . count($apostadores));
+    
+    // Se não encontrou apostadores, vamos verificar mais detalhes
+    if (empty($apostadores)) {
+        // Verificar se há usuários no sistema
+        $total_usuarios = $pdo->query("SELECT COUNT(*) FROM usuarios")->fetchColumn();
+        error_log("Total de usuários no sistema: " . $total_usuarios);
+        
+        // Verificar se há apostadores que fizeram apostas
+        $stmt = $pdo->prepare("SELECT COUNT(DISTINCT usuario_id) FROM apostas");
+        $stmt->execute();
+        $total_apostadores = $stmt->fetchColumn();
+        error_log("Total de apostadores com apostas: " . $total_apostadores);
+        
+        // Verificar a estrutura das tabelas
+        error_log("ID do revendedor atual: " . $revendedor_id);
+        error_log("Tipo de usuário: " . $_SESSION['tipo']);
+    }
 } catch (PDOException $e) {
     $erro = "Erro ao buscar apostadores: " . $e->getMessage();
+    error_log("Erro na consulta de apostadores: " . $e->getMessage());
     $apostadores = [];
 }
 
@@ -1089,6 +1173,9 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
                     <br>Total de apostadores encontrados: <?php echo $total_apostadores; ?>
                     <br><small><strong>Nota:</strong> Os números de WhatsApp devem estar no formato internacional, por exemplo: +55 35 99781-5465</small>
                 </div>
+
+                <?php error_log("Exibindo tabela de apostas com {$total_apostadores} apostadores."); ?>
+                
                 <form method="POST" id="form-enviar-comprovantes">
                     <!-- Botão de envio no topo da tabela -->
                     <div class="mb-3 text-center">
@@ -1149,14 +1236,7 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
                                     <td><?php echo $numeros_formatados; ?></td>
                                     <td>R$ <?php echo number_format($aposta['valor_aposta'], 2, ',', '.'); ?></td>
                                     <td>
-                                        <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['jogo_nome']); ?>&aposta_id=<?php echo $aposta['id']; ?>&formato=pdf" target="_blank" class="btn btn-sm btn-primary">
-                                            <i class="fas fa-file-pdf"></i>
-                                        </a>
-                                    <?php if (!empty($aposta['apostador_whatsapp'])): ?>
-                                        <a href="javascript:void(0)" onclick="enviarComprovanteIndividual(<?php echo $aposta['id']; ?>)" class="btn btn-sm btn-success">
-                                            <i class="fab fa-whatsapp"></i>
-                                        </a>
-                                    <?php endif; ?>
+                                                                <a href="../admin/gerar_comprovante.php?usuario_id=<?php echo $aposta['usuario_id']; ?>&jogo=<?php echo urlencode($aposta['jogo_nome']); ?>&aposta_id=<?php echo $aposta['id']; ?>&formato=pdf" target="_blank" class="btn btn-sm btn-primary">                            <i class="fas fa-file-pdf"></i>                        </a>                    <?php if (!empty($aposta['apostador_whatsapp'])): ?>                        <a href="javascript:void(0)" onclick="enviarComprovanteIndividual(<?php echo $aposta['id']; ?>)" class="btn btn-sm btn-success">                            <i class="fab fa-whatsapp"></i>                        </a>                    <?php endif; ?>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -1181,6 +1261,43 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
         </div>
     </div>
 </div>
+
+<!-- Mensagem de ajuda para revendedores sem apostas -->
+<?php if (empty($apostas) && empty($apostadores)): ?>
+<div class="card mt-4">
+    <div class="card-header bg-info text-white">
+        <i class="fas fa-info-circle"></i> Como criar apostas para seus clientes
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h5>Passos para criar apostas:</h5>
+                <ol>
+                    <li>Primeiro, cadastre seus clientes em <a href="clientes.php" class="text-primary">Meus Clientes</a></li>
+                    <li>Certifique-se de incluir o número de WhatsApp do cliente</li>
+                    <li>Em seguida, crie apostas para esses clientes</li>
+                    <li>Depois, volte a esta página para enviar os comprovantes</li>
+                </ol>
+            </div>
+            <div class="col-md-6">
+                <div class="alert alert-secondary">
+                    <h5><i class="fas fa-database"></i> Informações do Banco de Dados:</h5>
+                    <ul class="small mb-0">
+                        <li>Verifique se o banco de dados está corretamente configurado</li>
+                        <li>Se você acabou de instalar o sistema, pode ser necessário importar os dados iniciais</li>
+                        <li>Em caso de problemas, entre em contato com o suporte técnico</li>
+                    </ul>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="diagnostico_db.php" class="btn btn-outline-primary">
+                        <i class="fas fa-stethoscope"></i> Executar Diagnóstico do Banco de Dados
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <script>
     // Função para validar e enviar o formulário
@@ -1587,55 +1704,22 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
             }, 500);
         } else {
             console.error("Elemento 'selecionar-todos' não encontrado na página!");
-        }
-        
-        // Verificar se devemos abrir o WhatsApp automaticamente
-        var shouldOpenWhatsApp = <?php echo $abrir_whatsapp ? 'true' : 'false'; ?>;
-        console.log("Abrir WhatsApp automaticamente:", shouldOpenWhatsApp);
-        
-        if (shouldOpenWhatsApp) {
-            const whatsappButtons = document.querySelectorAll(".btn-whatsapp-send");
-            if (whatsappButtons.length > 0) {
-                console.log("Abrindo WhatsApp automaticamente após processamento...");
-                
-                // Pequeno atraso para garantir que a página esteja pronta
-                setTimeout(() => {
-                    try {
-                        const firstButton = whatsappButtons[0];
-                        console.log("Abrindo WhatsApp App para:", firstButton.href);
-                        
-                        // Tentar abrir diretamente
-                        const whatsappWindow = window.open(firstButton.href, "_blank");
-                        
-                        // Verificar se o pop-up foi bloqueado
-                        if (!whatsappWindow || whatsappWindow.closed || typeof whatsappWindow.closed === "undefined") {
-                            // Se foi bloqueado, mostrar alerta com instruções claras
-                            alert("ATENÇÃO: O navegador bloqueou a abertura do WhatsApp.\n\n" +
-                                  "Para resolver:\n" +
-                                  "1. Procure por um ícone de bloqueio na barra de endereço do navegador\n" +
-                                  "2. Clique nele e permita pop-ups para este site\n" +
-                                  "3. Depois, clique no botão 'Enviar via WhatsApp App' manualmente");
-                            
-                            // Destacar visualmente os botões do WhatsApp para ajudar o usuário
-                            document.querySelectorAll(".btn-whatsapp-send").forEach(btn => {
-                                btn.classList.add("btn-lg");
-                                btn.classList.add("animate__animated");
-                                btn.classList.add("animate__pulse");
-                                btn.classList.add("animate__infinite");
-                                btn.style.boxShadow = "0 0 15px rgba(37, 211, 102, 0.8)";
-                            });
-                        }
-                        
-                        // Limpar flags após tentativa
-                        localStorage.removeItem("processando_whatsapp");
-                    } catch (error) {
-                        console.error("Erro ao abrir WhatsApp:", error);
-                        alert("Ocorreu um erro ao tentar abrir o WhatsApp: " + error.message + "\n\nPor favor, clique manualmente no botão 'Enviar via WhatsApp App'");
-                    }
-                }, 1500);
-            } else {
-                console.error("Nenhum botão de WhatsApp encontrado na página após processamento");
-                alert("Não foi possível encontrar os links do WhatsApp. Por favor, atualize a página e tente novamente.");
+            // Log adicional para verificar se temos apostas na página
+            const temApostas = document.querySelectorAll('.aposta-checkbox').length > 0;
+            console.log(`Existem checkbox de apostas na página? ${temApostas ? 'Sim' : 'Não'}`);
+            console.log(`Total de linhas na tabela: ${document.querySelectorAll('#tabela-apostas tbody tr').length}`);
+            
+            // Verificar se existe a tabela
+            const tabelaApostas = document.getElementById('tabela-apostas');
+            console.log(`Tabela de apostas encontrada? ${tabelaApostas ? 'Sim' : 'Não'}`);
+            
+            // Verificar se há mensagem de erro na página
+            const mensagensErro = document.querySelectorAll('.alert-danger');
+            if (mensagensErro.length > 0) {
+                console.log("Mensagens de erro encontradas na página:");
+                mensagensErro.forEach((msg, i) => {
+                    console.log(`Erro ${i+1}: ${msg.textContent.trim()}`);
+                });
             }
         }
     });
@@ -1829,6 +1913,23 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
             }
         } else {
             console.error("Elemento 'selecionar-todos' não encontrado na página!");
+            // Log adicional para verificar se temos apostas na página
+            const temApostas = document.querySelectorAll('.aposta-checkbox').length > 0;
+            console.log(`Existem checkbox de apostas na página? ${temApostas ? 'Sim' : 'Não'}`);
+            console.log(`Total de linhas na tabela: ${document.querySelectorAll('#tabela-apostas tbody tr').length}`);
+            
+            // Verificar se existe a tabela
+            const tabelaApostas = document.getElementById('tabela-apostas');
+            console.log(`Tabela de apostas encontrada? ${tabelaApostas ? 'Sim' : 'Não'}`);
+            
+            // Verificar se há mensagem de erro na página
+            const mensagensErro = document.querySelectorAll('.alert-danger');
+            if (mensagensErro.length > 0) {
+                console.log("Mensagens de erro encontradas na página:");
+                mensagensErro.forEach((msg, i) => {
+                    console.log(`Erro ${i+1}: ${msg.textContent.trim()}`);
+                });
+            }
         }
     });
 
