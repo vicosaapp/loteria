@@ -49,8 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         // Validar a quantidade de números selecionados
         $numerosArray = explode(',', $numeros);
-        if (count($numerosArray) > 50) {
-            throw new Exception("Quantidade de números selecionados excede o limite permitido (máximo 50)");
+        if (count($numerosArray) > 85) {
+            throw new Exception("Quantidade de números selecionados excede o limite permitido (máximo 85)");
         }
         
         // Buscar informações do jogo para validar
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // Validar número máximo de dezenas (com limite absoluto de segurança)
-        $maxPermitido = min($jogo['maximo_numeros'], 50);
+        $maxPermitido = min($jogo['maximo_numeros'], 85);
         if (count($numerosArray) > $maxPermitido) {
             throw new Exception("Quantidade de números excede o máximo permitido. Máximo: " . $maxPermitido);
         }
@@ -441,7 +441,7 @@ function toggleNumero(element, numero) {
     
     if (index === -1) {
         // Define um limite máximo absoluto para evitar problemas
-        const limiteAbsoluto = 50;
+        const limiteAbsoluto = 85;
         const limiteEfetivo = Math.min(maxNumeros, limiteAbsoluto);
         
         // Se o número não está selecionado e não atingimos o máximo, adicione-o
@@ -680,7 +680,7 @@ document.getElementById('formAposta').addEventListener('submit', function(e) {
     }
     
     // Verificação de limite máximo de números (20 é um limite razoável)
-    const limiteAbsoluto = 50;
+    const limiteAbsoluto = 85;
     if (numerosSelected.length > limiteAbsoluto) {
         if (typeof Swal !== 'undefined') {
             Swal.fire({

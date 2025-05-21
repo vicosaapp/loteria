@@ -1690,7 +1690,6 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
                         // Adicionar um pequeno ícone de ajuda
                         const infoSpan = document.createElement('span');
                         infoSpan.className = "text-primary ms-1";
-                        infoSpan.innerHTML = '<i class="fas fa-info-circle fa-xs"></i>';
                         infoSpan.title = "Clique para selecionar todas as apostas de uma vez";
                         headerCell.appendChild(infoSpan);
                     }
@@ -1894,13 +1893,12 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
             // Adicionar dica visual para o usuário na coluna de título
             const headerCell = selecionarTodos.closest('th');
             if (headerCell) {
-                headerCell.title = "Clique para selecionar todas as apostas com WhatsApp";
                 headerCell.style.cursor = "pointer";
                 
                 // Adicionar um ícone de ajuda para informar o usuário
                 const infoSpan = document.createElement('span');
                 infoSpan.className = "text-primary ms-1";
-                infoSpan.innerHTML = '<i class="fas fa-info-circle fa-xs"></i>';
+                
                 infoSpan.title = "Seleciona todas as apostas com WhatsApp cadastrado";
                 headerCell.appendChild(infoSpan);
                 
@@ -2080,6 +2078,17 @@ echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animat
             });
         }
     });
+
+    function abrirWhatsAppParaApostasSelecionadas() {
+        // Exemplo: supondo que você já tenha o link do WhatsApp pronto
+        // Substitua pelo seu método de obter o link correto
+        const whatsappLinks = document.querySelectorAll('.btn-whatsapp-send');
+        if (whatsappLinks.length > 0) {
+            window.open(whatsappLinks[0].href, '_blank');
+        } else {
+            alert('Nenhum link do WhatsApp encontrado!');
+        }
+    }
 </script>
 
 <?php
@@ -2714,5 +2723,14 @@ if (isset($_SESSION['whatsapp_urls']) && !empty($_SESSION['whatsapp_urls'])) {
         });
     </script>
     <?php
+}
+
+if (isset($_GET['action']) && $_GET['action'] === 'whatsapp_ready' && isset($_SESSION['redirect_whatsapp'])) {
+    echo "<script>
+        window.onload = function() {
+            window.open('" . $_SESSION['redirect_whatsapp'] . "', '_blank');
+        }
+    </script>";
+    // Opcional: mostrar um botão de fallback
 }
 ?> 
